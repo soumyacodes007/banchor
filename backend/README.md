@@ -40,6 +40,8 @@ npm start
 | `DB_PATH` | `data/doomscroll.sqlite` | Put this on a persistent volume when hosted. A lost database rebuilds buys from the chain, but not minutes |
 | `DETOX_BASELINE_MINUTES` | `1200` | Weekly baseline |
 | `ADDRESSES_PATH` | `addresses.json` | |
+| `OPENROUTER_API_KEY` | none | Turns on live analysis. Without it, only the demo article works |
+| `OPENROUTER_MODEL` | `anthropic/claude-haiku-5.5` | |
 
 The server holds no keys. Only `prices.ts` does, and the server never imports it.
 
@@ -67,9 +69,20 @@ CORS is open and there's no auth, so anyone can post minutes for any address. Th
 | `GET /api/prices` | `{ NVDAx: 206.69, ... }`, dollars per share, cached for 15 seconds |
 | `GET /api/roast/:address` | Card numbers, plus ready-made copy in `lines` |
 | `GET /api/stats` | `totalTransactions`, `transactionsToday`, `uniqueWallets`, `bySource`, and the 20 latest buys |
+| `POST /api/analyze` | Takes `{ url, title, text }` and returns `{ headline, summary, picks, source }`, or a 503 if the page can't be analyzed |
 | `GET /health` | `{ ok, indexedBlock }` |
 
 Buys are never reported to the backend. `indexer.ts` reads `ScrollBuy` events from the chain about every 500 ms, so every number here can be recomputed from the chain.
+
+## Analyze
+
+The extension's Analyze button sends the open page here. `analyze.ts` asks a model through OpenRouter for a buy idea, and always returns a `source` so the UI can say which it was.
+
+The demo article is [NVIDIA and Palantir Cool Off in 2026](https://www.nasdaq.com/articles/nvidia-and-palantir-cool-2026-concerning). If OpenRouter has no key, fails or returns nothing usable, that one article gets a saved analysis written from its real numbers, with `source: "saved"`. Any other page gets a 503 rather than an invented answer.
+
+Article text is untrusted, since a page can carry instructions aimed at the model. So `cleanAnalysis` keeps only listed tickers, snaps amounts to $1, $5 or $20, and allows at most three picks. A suggestion is only ever a suggestion: buying is a separate tap, confirmed on the dashboard.
+
+The endpoint is public and each call costs OpenRouter credit, so results are cached for an hour and calls are capped at 20 a minute. Set a spending limit on the key as well.
 
 ## Calling the contracts
 

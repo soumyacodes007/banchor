@@ -1,5 +1,10 @@
 import { type Address, isAddress, zeroAddress } from "viem";
 import {
+  type Analysis,
+  AnalysisUnavailable,
+  type ArticleInput,
+} from "./analyze.ts";
+import {
   buildBasket,
   buildCopy,
   formatUsd,
@@ -16,11 +21,15 @@ export type ApiOptions = {
   chain: Chain;
   baselineMinutes: number;
   explorerUrl: string;
+  analyze?: (input: ArticleInput) => Promise<Analysis>;
   now?: () => Date;
 };
 
 const MINUTES_IN_A_WEEK = 7 * 24 * 60;
 const MAX_BODY_BYTES = 16 * 1024;
+/** Sized for a long article, and the model only reads this much of one. */
+const MAX_ARTICLE_BODY_BYTES = 64 * 1024;
+const MAX_ARTICLE_CHARS = 12_000;
 const DEFAULT_COPY_USD = 10;
 const MAX_COPY_USD = 1_000;
 const LATEST_BUYS = 20;
@@ -86,9 +95,12 @@ function parseCopyUsd(value: string | null): bigint {
   return BigInt(Math.round(usd * MICRO));
 }
 
-async function readBody(request: Request): Promise<Record<string, unknown>> {
+async function readBody(
+  request: Request,
+  maxBytes = MAX_BODY_BYTES,
+): Promise<Record<string, unknown>> {
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw new BadRequest("Body is too large");
+  if (text.length > maxBytes) throw new BadRequest("Body is too large");
   try {
     const body: unknown = JSON.parse(text);
     if (typeof body === "object" && body !== null) {
@@ -148,6 +160,26 @@ export function createApi(options: ApiOptions) {
     const week = currentWeek();
     store.saveMinutes(address, week, minutes, liveMinutes);
     return json({ address, week, minutes, liveMinutes });
+  }
+
+  async function analyzeArticle(request: Request): Promise<Response> {
+    if (options.analyze === undefined) {
+      throw new AnalysisUnavailable("Analysis is not set up");
+    }
+    const body = await readBody(request, MAX_ARTICLE_BODY_BYTES);
+    if (typeof body.url !== "string" || !/^https?:\/\/\S+$/.test(body.url)) {
+      throw new BadRequest("An article url is required");
+    }
+    if (body.text !== undefined && typeof body.text !== "string") {
+      throw new BadRequest("text must be a string");
+    }
+    return json(
+      await options.analyze({
+        url: body.url,
+        title: typeof body.title === "string" ? body.title.slice(0, 300) : "",
+        text: (body.text ?? "").slice(0, MAX_ARTICLE_CHARS),
+      }),
+    );
   }
 
   function basket(address: Address, mode: Mode): Response {
@@ -257,6 +289,9 @@ export function createApi(options: ApiOptions) {
     if (api !== "api") return json({ error: "Not found" }, 404);
 
     if (method === "POST" && resource === "minutes") return saveMinutes(request);
+    if (method === "POST" && resource === "analyze") {
+      return analyzeArticle(request);
+    }
 
     if (method === "GET") {
       if (resource === "stats") return stats();
@@ -282,6 +317,9 @@ export function createApi(options: ApiOptions) {
     } catch (error) {
       if (error instanceof BadRequest) {
         return json({ error: error.message }, 400);
+      }
+      if (error instanceof AnalysisUnavailable) {
+        return json({ error: error.message }, 503);
       }
       console.error("request failed", error);
       return json({ error: "Internal error" }, 500);

@@ -35,9 +35,11 @@ For local testing you can override `config.json` without rebuilding: **Option/Al
 | `manifest.json` | Permissions: tabs, alarms, idle, storage, contextMenus, plus the content scripts. |
 | `background.js` | Counts a minute every 60s (active tab, focused window, user active or video tab audible). Adds Live seconds, computes the basket in Roast and Detox modes, creates buy intents, and verifies receipts over RPC. |
 | `live.js` | Instagram and YouTube. While Live mode is on, it counts visible seconds of scrolling or video playback and shows the corner badge. |
-| `highlight.js` | Any site. If a selection under 40 characters matches `tickers.json`, it shows the buy card ($1 / $5 / $20). Also used for the right-click menu. |
+| `highlight.js` | Any site. If a selection under 40 characters matches `tickers.json`, it shows the buy card ($1 / $5 / $20). Also used for the right-click menu. Reads the page text only when the user taps Analyze. |
 | `tickers.json` | Names, tickers and cashtags for each stock, plus the site → stock map. A stock is only offered if its key exists in `addresses.json`. |
-| `popup.*` | This week's sites, the basket, Buy / Not now, top-up, USDC balance read from chain, toggles, Settings. |
+| `popup.*` | Analyze this page, this week's sites, the basket, Buy / Not now, top-up, USDC balance read from chain, toggles, Settings. |
+
+**Analyze this page** sends the open page's URL, title and text to the backend, only when tapped, and shows what to buy with one button to buy it all. For the demo, use the [Nasdaq article](https://www.nasdaq.com/articles/nvidia-and-palantir-cool-2026-concerning). It works there even with no OpenRouter key, and shows "Saved analysis". A tab opened before the extension was loaded needs a reload first.
 
 ## What the extension expects from the rest of the repo
 

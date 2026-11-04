@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { createAnalyzer } from "./analyze.ts";
 import { createApi } from "./api.ts";
 import { DEFAULT_BASELINE_MINUTES } from "./basket.ts";
 import { createChain, createClient, loadAddresses } from "./chain.ts";
@@ -31,6 +32,11 @@ const handle = createApi({
     process.env.DETOX_BASELINE_MINUTES ?? DEFAULT_BASELINE_MINUTES,
   ),
   explorerUrl: process.env.EXPLORER_URL ?? "https://testnet.monadvision.com",
+  analyze: createAnalyzer({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    model: process.env.OPENROUTER_MODEL,
+    listed: Object.keys(addresses.stocks),
+  }),
 });
 
 const server = createServer(async (incoming, outgoing) => {

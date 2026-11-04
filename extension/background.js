@@ -437,6 +437,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const intent = await createIntent([{ ticker: m.ticker, usd }], "HIGHLIGHT");
         return { ok: true, intentId: intent.id };
       }
+      case "ANALYZE_PAGE": {
+        const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        if (!tab?.id || !/^https?:/.test(tab.url || "")) throw new Error("Open an article first");
+        // Tabs opened before the extension loaded have no content script yet.
+        const page = await chrome.tabs.sendMessage(tab.id, { type: "READ_ARTICLE" }).catch(() => null);
+        if (!page) throw new Error("Reload this page, then try again");
+        return api("/api/analyze", { method: "POST", body: JSON.stringify(page) })
+          .catch(() => { throw new Error("Couldn't analyze this page right now"); });
+      }
+      case "ANALYSIS_BUY": {
+        const picks = Array.isArray(msg.picks) ? msg.picks.slice(0, 3) : [];
+        if (!picks.length || !picks.every((p) => [1, 5, 20].includes(Number(p.usd)))) throw new Error("bad amount");
+        const intent = await createIntent(picks.map((p) => ({ ticker: String(p.ticker), usd: Number(p.usd) })), "HIGHLIGHT");
+        return { ok: true, intentId: intent.id };
+      }
       case "BLOCK_SITE": {
         const s = await getSettings();
         const host = sender.tab?.url ? siteOf(sender.tab.url) : null;

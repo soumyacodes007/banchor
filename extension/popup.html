@@ -60,6 +60,12 @@
     .addr { font:600 13px ui-monospace,monospace; margin-top:2px; }
     .chip { padding:5px 12px; border-radius:999px; border:1.5px solid var(--accent); background:var(--card); color:var(--accent); font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
     .chip:hover { background:var(--peri); }
+    .idea { font:400 26px/1.1 "Instrument Serif",Georgia,serif; color:var(--accent); margin-top:12px; }
+    #analysis p { margin:6px 0 8px; }
+    #analysis[hidden] { display:none; }
+    .pick { padding:6px 0; border-top:1px dashed var(--line); font-size:12px; }
+    .pick .row { padding:0 0 2px; font-size:13px; font-weight:600; }
+    .fine { margin-top:8px; font-size:10.5px; color:var(--dim); text-align:center; }
     .passkey { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:11px; margin:6px 0 4px;
                border-radius:14px; border:0; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
     .passkey:hover { background:#0047d6; }
@@ -81,6 +87,14 @@
       <button data-mode="roast">Roast</button><button data-mode="detox">Detox</button>
     </div>
   </div>
+
+  <section>
+    <div class="label">Research</div>
+    <button class="full primary" id="analyze" style="margin-top:8px">Analyze this page</button>
+    <div class="fine">Sends this page to Banchor to read, only when you tap.</div>
+    <div id="analysis" hidden></div>
+    <div class="err" id="analyzeErr"></div>
+  </section>
 
   <section>
     <div class="label">This week</div>

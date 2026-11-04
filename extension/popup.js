@@ -76,6 +76,37 @@ $("footer").addEventListener("click", (e) => {
   cfg.hidden = !cfg.hidden; sec.hidden = cfg.hidden; cfg.open = !cfg.hidden;
 });
 $("topup").addEventListener("click", () => act({ type: "TOP_UP" }));
+
+// One-click research: reads the open page and suggests what to buy. Buying is a separate tap.
+function renderAnalysis(a) {
+  const total = a.picks.reduce((sum, p) => sum + p.usd, 0);
+  const note = a.source === "saved" ? "Saved analysis" : "AI analysis";
+  $("analysis").hidden = false;
+  $("analysis").innerHTML = `
+    <div class="idea">${esc(a.headline)}</div>
+    <p class="dim">${esc(a.summary)}</p>
+    ${a.picks.map((p) => `<div class="pick"><div class="row"><span>Buy $${esc(p.usd)} of ${esc(p.company)}</span><span class="dim">${esc(p.ticker)}</span></div><div class="dim">${esc(p.reason)}</div></div>`).join("")}
+    ${a.picks.length ? `<button class="full primary" id="analysisBuy">Buy $${esc(total)} of these</button>` : `<div class="empty">No Banchor stocks on this page.</div>`}
+    <div class="fine">${note} · Mock stocks on testnet · Not financial advice</div>`;
+  $("analysisBuy")?.addEventListener("click", async () => {
+    $("analyzeErr").textContent = "";
+    const res = await send({ type: "ANALYSIS_BUY", picks: a.picks });
+    if (res?.error) $("analyzeErr").textContent = res.error;
+    else window.close();
+  });
+}
+$("analyze").addEventListener("click", async () => {
+  const button = $("analyze");
+  $("analyzeErr").textContent = "";
+  $("analysis").hidden = true;
+  button.disabled = true;
+  button.textContent = "Reading this page…";
+  const res = await send({ type: "ANALYZE_PAGE" });
+  button.disabled = false;
+  button.textContent = "Analyze this page";
+  if (res?.error) $("analyzeErr").textContent = res.error;
+  else renderAnalysis(res);
+});
 $("reset").addEventListener("click", () => { if (confirm("Drop this week's unbought amounts?")) act({ type: "RESET_UNBOUGHT" }); });
 $("live").addEventListener("change", (e) => act({ type: "SAVE_SETTINGS", patch: { liveMode: e.target.checked } }));
 $("highlight").addEventListener("change", (e) => act({ type: "SAVE_SETTINGS", patch: { highlightEnabled: e.target.checked } }));

@@ -8,7 +8,7 @@ import {
   type Week,
 } from "./basket.ts";
 
-const COMPANIES: Record<string, string> = {
+export const COMPANIES: Record<string, string> = {
   METAx: "Meta",
   GOOGLx: "Google",
   NFLXx: "Netflix",

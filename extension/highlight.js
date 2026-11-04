@@ -1,8 +1,15 @@
 // Highlight to buy. The selection is matched by the background worker against tickers.json
 // (bundled with the extension). Nothing leaves the laptop unless the user taps Buy.
+// Also reads the page for Analyze, but only when the user taps that button in the popup.
 (() => {
   if (window.__ddHighlight || window.top !== window) return;
   window.__ddHighlight = true;
+
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    if (msg?.type !== "READ_ARTICLE") return;
+    const el = document.querySelector("article") || document.querySelector("main") || document.body;
+    reply({ url: location.href, title: document.title, text: el.innerText.replace(/\s+/g, " ").trim().slice(0, 12000) });
+  });
 
   let host = null, root = null, current = null, seq = 0;
 
