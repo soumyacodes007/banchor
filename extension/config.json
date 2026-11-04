@@ -1,5 +1,5 @@
 {
-  "dashboardUrl": "",
+  "dashboardUrl": "https://banchor.vercel.app",
   "backendUrl": "https://backend-production-1dd0.up.railway.app",
   "rpcUrl": "https://testnet-rpc.monad.xyz",
   "addresses": {
@@ -29,6 +29,7 @@
     "factory": "0x70Ae475Fbf221e90ee51BbE6427F97f27EAf6080",
     "router": "0xb361cc73B5813338E661e1c373433F04aFc82C80",
     "usdc": "0xB5CC9995a1ddbdED596804af5B59B452cEc70D40",
-    "venue": "0x400a452B564eA24332e8E1a10065355D7837Ea57"
+    "venue": "0x400a452B564eA24332e8E1a10065355D7837Ea57",
+    "MockSellDesk": "0x5917Acd3F47d935731659cF1E526e4B5DEc37a2d"
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 import { createPublicClient, createWalletClient, http, type LocalAccount, formatUnits } from "viem";
 import { chain, RPC_URL, ADDRESSES, STOCK_TICKERS } from "./config";
-import { erc20Abi, mockUsdcAbi, scrollBasketAbi, SOURCE_ID, type Source } from "./abi";
+import { erc20Abi, mockUsdcAbi, routerAbi, scrollBasketAbi, sellDeskAbi, SOURCE_ID, type Source } from "./abi";
 
 export const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
 const walletClient = (account: LocalAccount) => createWalletClient({ account, chain, transport: http(RPC_URL) });
@@ -42,8 +42,33 @@ export async function topUp(account: LocalAccount) {
   return hash;
 }
 
-export type IntentItem = { ticker: string; stock: `0x${string}`; usdc: string; usd: number };
-export type Intent = { id: string; chainId: number; source: Source; items: IntentItem[]; createdAt: number; ref?: `0x${string}` };
+export type IntentItem = { ticker: string; stock: `0x${string}`; usdc: string; usd: number; sellAll?: boolean };
+export type Intent = { id: string; chainId: number; source: Source; side?: "BUY" | "SELL"; items: IntentItem[]; createdAt: number; ref?: `0x${string}` };
+
+/** Approves the stock if needed, then sells it back at the router's price. */
+export async function sellIntent(account: LocalAccount, intent: Intent, onStep?: (s: string) => void) {
+  if (intent.chainId !== chain.id) throw new Error(`Intent is for chain ${intent.chainId}`);
+  const desk = need("MockSellDesk"), router = need("router");
+  const item = intent.items[0];
+  const wc = walletClient(account);
+  const [balance, price] = await Promise.all([
+    publicClient.readContract({ address: item.stock, abi: erc20Abi, functionName: "balanceOf", args: [account.address] }),
+    publicClient.readContract({ address: router, abi: routerAbi, functionName: "prices", args: [item.stock] }),
+  ]);
+  const wanted = item.sellAll ? balance : (BigInt(item.usdc) * 10n ** 18n) / price;
+  const amount = wanted > balance ? balance : wanted;
+  if (amount === 0n) throw new Error(`You don't hold any ${item.ticker}.`);
+  const allowance = await publicClient.readContract({ address: item.stock, abi: erc20Abi, functionName: "allowance", args: [account.address, desk] });
+  if (allowance < amount) {
+    onStep?.("Approving…");
+    const h = await wc.writeContract({ address: item.stock, abi: erc20Abi, functionName: "approve", args: [desk, 2n ** 255n], gas: 80_000n });
+    await publicClient.waitForTransactionReceipt({ hash: h });
+  }
+  onStep?.("Selling…");
+  // The desk may need extra faucet calls for a big sale, so leave room for them.
+  const faucetCalls = BigInt(Math.ceil(item.usd / FAUCET_USD));
+  return wc.writeContract({ address: desk, abi: sellDeskAbi, functionName: "sell", args: [item.stock, amount, 0n], gas: 300_000n + 80_000n * faucetCalls });
+}
 
 /** Approves USDC if needed, then buys the whole basket in one ScrollBasket call. */
 export async function buyIntent(account: LocalAccount, intent: Intent, onStep?: (s: string) => void) {

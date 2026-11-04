@@ -6,8 +6,8 @@ import { Dither } from "@/components/Dither";
 import { Fingerprint } from "@/components/SignIn";
 import { SignIn } from "@/components/SignIn";
 import { api, short, usd } from "@/lib/api";
-import { EXPLORER, chain } from "@/lib/config";
-import { buyIntent } from "@/lib/chain";
+import { EXPLORER, STOCKS, chain } from "@/lib/config";
+import { buyIntent, publicClient, topUp, usdcBalance } from "@/lib/chain";
 import { savedWallet, withSigner, friendlyError } from "@/lib/wallet";
 
 // GET /api/roast/:address (backend/roast.ts)
@@ -18,12 +18,15 @@ type Roast = {
 };
 // GET /api/copy/:address?usd= — basket args ready for approve + buyBasket
 type CopyArgs = { stocks: `0x${string}`[]; amounts: string[]; total: string; totalUsd: string; ref: `0x${string}`; items: { ticker: string }[] };
+// GET /api/portfolio/:address — everything the wallet holds, however it was bought.
+type Portfolio = { holdings: { ticker: string; usd: string }[] };
 const COPY_USD = 5;
 
 export default function RoastPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const address = id as `0x${string}`;
   const [roast, setRoast] = useState<Roast | null>(null);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<`0x${string}` | null>(null);
   const [copying, setCopying] = useState(false);
@@ -32,10 +35,13 @@ export default function RoastPage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     setMe(savedWallet()?.address ?? null);
-    api<Roast>(`/api/roast/${address}`).then((r) => { setRoast(r); setLoaded(true); });
+    Promise.all([api<Roast>(`/api/roast/${address}`), api<Portfolio>(`/api/portfolio/${address}`)])
+      .then(([r, p]) => { setRoast(r); setPortfolio(p); setLoaded(true); });
   }, [address]);
 
-  const holdings = (roast?.stocks || []).filter((s) => s.ownedUsd !== "$0.00");
+  // Copy mirrors the whole wallet, so a highlight or Analyze buy counts too.
+  const holdings = portfolio?.holdings ?? [];
+  const minutesOf = (ticker: string) => roast?.stocks.find((s) => s.ticker === ticker)?.minutes ?? 0;
 
   async function copyBasket() {
     setBusy("Building basket…"); setMsg(null);
@@ -47,7 +53,18 @@ export default function RoastPage({ params }: { params: Promise<{ id: string }> 
         items: args.stocks.map((stock, i) => ({ ticker: args.items[i]?.ticker ?? "", stock, usdc: args.amounts[i], usd: Number(args.amounts[i]) / 1e6 })),
       };
       setBusy("Unlocking wallet…");
-      const hash = await withSigner((acc) => buyIntent(acc, intent, setBusy));
+      const hash = await withSigner(async (acc) => {
+        // A new wallet has no USDC yet, and buying without it only burns gas.
+        const balance = await usdcBalance(acc.address);
+        if (balance !== null && balance * 1e6 < Number(args.total)) {
+          setBusy("Topping up…");
+          await topUp(acc);
+        }
+        return buyIntent(acc, intent, setBusy);
+      });
+      setBusy("Confirming on Monad…");
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error("The copy failed onchain, so nothing was bought.");
       setMsg({ ok: true, text: `Copied! You bought ${args.totalUsd} of this basket.`, hash });
     } catch (e) { setMsg({ ok: false, text: friendlyError(e) }); } finally { setBusy(""); }
   }
@@ -72,7 +89,7 @@ export default function RoastPage({ params }: { params: Promise<{ id: string }> 
         <section className="card c7">
           <div className="label">The basket</div>
           {holdings.length ? holdings.map((h) => (
-            <div className="row" key={h.ticker}><span>{h.company} <span className="dim">{h.ticker} · {Math.round(h.minutes)} min</span></span><span>{h.ownedUsd}</span></div>
+            <div className="row" key={h.ticker}><span>{STOCKS[h.ticker] || h.ticker} <span className="dim">{h.ticker}{minutesOf(h.ticker) > 0 ? ` · ${Math.round(minutesOf(h.ticker))} min` : ""}</span></span><span>{h.usd}</span></div>
           )) : <p className="empty">{loaded ? "Nothing bought yet. Suspiciously productive." : "…"}</p>}
           {[roast?.lines.highlight, roast?.lines.x, roast?.lines.detox].filter(Boolean).map((l) => <p key={l!} className="dim">{l}</p>)}
         </section>

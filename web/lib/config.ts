@@ -21,4 +21,6 @@ export const STOCK_TICKERS = Object.keys(ADDRESSES).filter((k) => /^[A-Z]+x$/.te
 export const STOCKS: Record<string, string> = {
   METAx: "Meta", GOOGLx: "Alphabet", NFLXx: "Netflix", AMZNx: "Amazon",
   SPYx: "S&P 500", NVDAx: "Nvidia", AAPLx: "Apple", TSLAx: "Tesla", MSFTx: "Microsoft",
+  AMDx: "AMD", COINx: "Coinbase", MSTRx: "Strategy", PLTRx: "Palantir", HOODx: "Robinhood",
+  INTCx: "Intel", ORCLx: "Oracle", UBERx: "Uber", DISx: "Disney", SHOPx: "Shopify", BABAx: "Alibaba",
 };

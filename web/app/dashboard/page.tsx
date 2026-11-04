@@ -6,7 +6,7 @@ import { Brand, Footer } from "@/components/Brand";
 import { Dither } from "@/components/Dither";
 import { SignIn, Fingerprint } from "@/components/SignIn";
 import { savedWallet, forgetWallet, withSigner, friendlyError } from "@/lib/wallet";
-import { usdcBalance, monBalance, stockBalances, topUp, buyIntent, publicClient, FAUCET_USD, type Intent } from "@/lib/chain";
+import { usdcBalance, monBalance, stockBalances, topUp, buyIntent, sellIntent, publicClient, FAUCET_USD, type Intent } from "@/lib/chain";
 import { toExtension } from "@/lib/extension";
 import { api, short, usd } from "@/lib/api";
 import { EXPLORER, STOCKS, ADDRESSES } from "@/lib/config";
@@ -87,16 +87,17 @@ function Dashboard() {
     if (!intent) return;
     setBusy("Unlocking wallet…"); setToast(null);
     try {
-      const hash = await withSigner((acc) => buyIntent(acc, intent, setBusy));
+      const selling = intent.side === "SELL";
+      const hash = await withSigner((acc) => (selling ? sellIntent : buyIntent)(acc, intent, setBusy));
       await toExtension({ type: "DD_BOUGHT", intentId: intent.id, txHash: hash });
       setBusy("Confirming on Monad…");
       const rcpt = await publicClient.waitForTransactionReceipt({ hash });
       if (rcpt.status !== "success") throw new Error("Transaction reverted");
       const total = intent.items.reduce((a, b) => a + b.usd, 0);
       const label = intent.items.map((i) => `${usd(i.usd)} ${STOCKS[i.ticker] || i.ticker}`).join(" + ");
-      pushActivity({ hash, source: intent.source, usd: total, at: Date.now(), label });
+      pushActivity({ hash, source: selling ? "SELL" : intent.source, usd: total, at: Date.now(), label });
       setActivity(loadActivity());
-      setToast({ ok: true, text: `Bought ${label}`, hash });
+      setToast({ ok: true, text: `${selling ? "Sold" : "Bought"} ${label}`, hash });
       setIntentOpen(false); clearParams(); refresh();
     } catch (e) { setToast({ ok: false, text: friendlyError(e) }); } finally { setBusy(""); }
   }
@@ -127,6 +128,8 @@ function Dashboard() {
   const holdings = Object.entries(stocks).filter(([, v]) => v > 0);
   const value = holdings.reduce((a, [t, v]) => a + (prices[t] ? v * prices[t] : 0), 0);
   const intentTotal = intent?.items.reduce((a, b) => a + b.usd, 0) ?? 0;
+  const selling = intent?.side === "SELL";
+  const shortOfUsdc = !selling && usdc != null && usdc < intentTotal;
 
   return (
     <main className="wrap">
@@ -192,15 +195,15 @@ function Dashboard() {
       {intent && intentOpen && (
         <div className="modal-back" role="dialog" aria-modal="true">
           <div className="modal">
-            <div className="label">{intent.source === "HIGHLIGHT" ? "Highlight buy" : "Buy my scroll"}</div>
+            <div className="label">{selling ? "Sell" : intent.source === "HIGHLIGHT" ? "Highlight buy" : "Buy my scroll"}</div>
             <h2>{usd(intentTotal)}</h2>
             {intent.items.map((i) => (
               <div className="row" key={i.ticker}><span>{STOCKS[i.ticker] || i.ticker}</span><span>{usd(i.usd)}</span></div>
             ))}
-            {usdc != null && usdc < intentTotal && <p className="error">Not enough USDC. Top up first.</p>}
+            {shortOfUsdc && <p className="error">Not enough USDC. Top up first.</p>}
             <div className="actions">
               <button className="btn" onClick={cancelBuy} disabled={!!busy}>Cancel</button>
-              {usdc != null && usdc < intentTotal
+              {shortOfUsdc
                 ? <button className="btn primary" onClick={() => doTopUp()} disabled={!!busy}>{busy ? "…" : `Top up ${usd(FAUCET_USD)}`}</button>
                 : <button className="btn primary" onClick={confirmBuy} disabled={!!busy}><Fingerprint /> {busy || "Confirm"}</button>}
             </div>

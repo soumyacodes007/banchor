@@ -17,5 +17,9 @@ export const scrollBasketAbi = parseAbi([
   "function buyBasket(address[] stocks, uint256[] amounts, uint256[] minOuts, uint8 source, address ref) returns (uint256[])",
 ]);
 
+// MockSellDesk (contracts/src/MockSellDesk.sol): buys a stock back at the router's price.
+export const sellDeskAbi = parseAbi(["function sell(address stock, uint256 amount, uint256 minUsdc) returns (uint256)"]);
+export const routerAbi = parseAbi(["function prices(address stock) view returns (uint256)"]);
+
 export const SOURCE_ID = { SCROLL: 0, HIGHLIGHT: 1, COPY: 2, GIFT: 3 } as const;
 export type Source = keyof typeof SOURCE_ID;

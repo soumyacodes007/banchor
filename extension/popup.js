@@ -39,7 +39,7 @@ async function render() {
   if (chainError) $("err").textContent = chainError;
 
   $("history").innerHTML = history.map((h) =>
-    `<div class="row"><span>${esc(h.source.toLowerCase())} · $${h.items.reduce((a, b) => a + b.usd, 0).toFixed(2)}</span>
+    `<div class="row"><span>${esc(h.side === "SELL" ? "sold" : h.source.toLowerCase())} · $${h.items.reduce((a, b) => a + b.usd, 0).toFixed(2)}</span>
      <a href="${EXPLORER}${esc(h.txHash)}" target="_blank">view tx</a></div>`).join("");
 
   $("live").checked = settings.liveMode;

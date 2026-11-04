@@ -295,7 +295,7 @@ async function waitForReceipt(hash, timeoutMs = 60_000) {
 // The dashboard (web/lib/buy.ts) reads ?intent=..., builds the batched approve + buy/buyBasket call,
 // signs with passkey or session key, then reports back via chrome.runtime.sendMessage(EXT_ID, {type:"DD_BOUGHT"...}).
 const SOURCES = ["SCROLL", "HIGHLIGHT", "COPY", "GIFT"];
-async function createIntent(items, source) {
+async function createIntent(items, source, side = "BUY") {
   if (!SOURCES.includes(source)) throw new Error("bad source");
   const settings = await getSettings();
   if (!settings.dashboardUrl) throw new Error("Banchor isn't configured yet — dashboard link missing");
@@ -304,14 +304,17 @@ async function createIntent(items, source) {
     const stock = settings.addresses[it.ticker];
     if (!stock) throw new Error(`${it.ticker} has no address in addresses.json`);
     if (it.usd < MIN_BUY_USD) continue;
-    priced.push({ ticker: it.ticker, stock, usdc: String(Math.round(it.usd * 1e6)), usd: it.usd });
+    priced.push({ ticker: it.ticker, stock, usdc: String(Math.round(it.usd * 1e6)), usd: it.usd, sellAll: !!it.sellAll });
   }
-  if (!priced.length) throw new Error("Nothing to buy");
+  if (!priced.length) throw new Error(side === "SELL" ? "Nothing to sell" : "Nothing to buy");
 
-  const intent = { id: crypto.randomUUID(), chainId: MONAD_CHAIN_ID, source, items: priced, createdAt: Date.now() };
-  const week = await getWeek();
-  for (const it of priced) add(week.queuedUsd, it.ticker, it.usd);
-  await saveWeek(week);
+  const intent = { id: crypto.randomUUID(), chainId: MONAD_CHAIN_ID, source, side, items: priced, createdAt: Date.now() };
+  // A sale spends no earnings, so only buys are held against them.
+  if (side === "BUY") {
+    const week = await getWeek();
+    for (const it of priced) add(week.queuedUsd, it.ticker, it.usd);
+    await saveWeek(week);
+  }
   const { intents = {} } = await chrome.storage.local.get("intents");
   intents[intent.id] = intent;
   await chrome.storage.local.set({ intents });
@@ -326,9 +329,11 @@ async function releaseIntent(id) {
   const { intents = {} } = await chrome.storage.local.get("intents");
   const intent = intents[id];
   if (!intent) return;
-  const week = await getWeek();
-  for (const it of intent.items) week.queuedUsd[it.ticker] = Math.max(0, (week.queuedUsd[it.ticker] || 0) - it.usd);
-  await saveWeek(week);
+  if (intent.side !== "SELL") {
+    const week = await getWeek();
+    for (const it of intent.items) week.queuedUsd[it.ticker] = Math.max(0, (week.queuedUsd[it.ticker] || 0) - it.usd);
+    await saveWeek(week);
+  }
   delete intents[id];
   await chrome.storage.local.set({ intents });
 }
@@ -341,20 +346,23 @@ async function confirmIntent(id, txHash) {
   const settings = await getSettings();
   const receipt = await waitForReceipt(txHash);
   if (receipt.status !== "0x1") { await releaseIntent(id); throw new Error("Transaction reverted"); }
-  // Must have touched ScrollBasket (directly, or via the smart account / entry point emitting its logs).
-  const basket = settings.addresses.ScrollBasket?.toLowerCase();
-  if (basket && !receipt.logs.some((l) => l.address.toLowerCase() === basket)) {
-    throw new Error("Transaction did not call ScrollBasket");
+  // Must have touched our contract (directly, or via the smart account / entry point emitting its logs).
+  const selling = intent.side === "SELL";
+  const contract = (selling ? settings.addresses.MockSellDesk : settings.addresses.ScrollBasket)?.toLowerCase();
+  if (contract && !receipt.logs.some((l) => l.address.toLowerCase() === contract)) {
+    throw new Error(`Transaction did not call ${selling ? "MockSellDesk" : "ScrollBasket"}`);
   }
-  const week = await getWeek();
-  for (const it of intent.items) {
-    week.queuedUsd[it.ticker] = Math.max(0, (week.queuedUsd[it.ticker] || 0) - it.usd);
-    add(week.boughtUsd, it.ticker, it.usd);
+  if (!selling) {
+    const week = await getWeek();
+    for (const it of intent.items) {
+      week.queuedUsd[it.ticker] = Math.max(0, (week.queuedUsd[it.ticker] || 0) - it.usd);
+      add(week.boughtUsd, it.ticker, it.usd);
+    }
+    await saveWeek(week);
   }
-  await saveWeek(week);
   delete intents[id];
   const { history = [] } = await chrome.storage.local.get("history");
-  history.unshift({ txHash, source: intent.source, items: intent.items, at: Date.now() });
+  history.unshift({ txHash, source: intent.source, side: intent.side, items: intent.items, at: Date.now() });
   await chrome.storage.local.set({ intents, history: history.slice(0, 50) });
   portfolioCache.at = 0;
   await chrome.action.setBadgeText({ text: "" });
@@ -427,7 +435,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         chrome.contextMenus.update("dd-buy", m ? { visible: true, title: `Buy $5 of ${m.ticker} (${m.company})` } : { visible: false });
         if (!m) return null;
         const [prices, portfolio] = await Promise.all([getPrices().catch(() => null), getPortfolio().catch(() => null)]);
-        return { ...m, price: prices?.[m.ticker] ?? null, ownedUsd: portfolio?.[m.ticker]?.usd ?? null };
+        const ownedUsd = portfolio?.[m.ticker]?.usd ?? null;
+        return { ...m, price: prices?.[m.ticker] ?? null, ownedUsd, canSell: !!s.addresses.MockSellDesk && ownedUsd >= MIN_BUY_USD };
+      }
+      case "HIGHLIGHT_SELL": {
+        const usd = Number(msg.usd);
+        if (![1, 5, 20].includes(usd)) throw new Error("bad amount");
+        const m = await matchSelection(msg.text);
+        if (!m) throw new Error("no match");
+        portfolioCache.at = 0; // never sell against a stale balance
+        const owned = (await getPortfolio())?.[m.ticker]?.usd ?? 0;
+        if (owned < MIN_BUY_USD) throw new Error(`You don't hold any ${m.ticker}`);
+        const sellAll = usd >= owned;
+        const intent = await createIntent([{ ticker: m.ticker, usd: sellAll ? owned : usd, sellAll }], "HIGHLIGHT", "SELL");
+        return { ok: true, intentId: intent.id };
       }
       case "HIGHLIGHT_BUY": {
         const usd = Number(msg.usd);
