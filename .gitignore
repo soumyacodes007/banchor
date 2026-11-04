@@ -1,0 +1,11 @@
+node_modules/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+.env
+.env.*
+!.env.example
+backend/data/
+backend/addresses.local.json
+*.log
+.DS_Store

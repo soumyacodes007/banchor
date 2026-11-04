@@ -1,0 +1,18 @@
+{
+  "name": "doomscroll-contracts",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "deploy:testnet": "forge script script/Deploy.s.sol --rpc-url monad_testnet --broadcast"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.4.0"
+  },
+  "devDependencies": {
+    "@foundry-rs/anvil": "1.7.1",
+    "@foundry-rs/cast": "1.7.1",
+    "@foundry-rs/forge": "1.7.1",
+    "forge-std": "github:foundry-rs/forge-std#620536f"
+  }
+}
