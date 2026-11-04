@@ -15,6 +15,7 @@ export const mockUsdcAbi = parseAbi(["function faucet()", "function FAUCET_AMOUN
 export const scrollBasketAbi = parseAbi([
   "function buy(address stock, uint256 amount, uint256 minOut, uint8 source) returns (uint256)",
   "function buyBasket(address[] stocks, uint256[] amounts, uint256[] minOuts, uint8 source, address ref) returns (uint256[])",
+  "event ScrollBuy(address indexed user, address indexed stock, uint256 usdc, uint256 out, uint8 indexed source, address ref)",
 ]);
 
 export const SOURCE_ID = { SCROLL: 0, HIGHLIGHT: 1, COPY: 2, GIFT: 3 } as const;

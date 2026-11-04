@@ -6,7 +6,7 @@ import { Brand, Footer } from "@/components/Brand";
 import { Dither } from "@/components/Dither";
 import { SignIn, Fingerprint } from "@/components/SignIn";
 import { savedWallet, forgetWallet, withSigner, friendlyError } from "@/lib/wallet";
-import { usdcBalance, monBalance, stockBalances, buyIntent, publicClient, FAUCET_USD, type Intent } from "@/lib/chain";
+import { usdcBalance, monBalance, stockBalances, buyIntent, publicClient, boughtFromReceipt, FAUCET_USD, type Intent } from "@/lib/chain";
 import { TopUpModal } from "@/components/TopUpModal";
 import { toExtension, rememberExtensionId } from "@/lib/extension";
 import { api, short, usd } from "@/lib/api";
@@ -61,10 +61,14 @@ function Dashboard() {
     // Balances come straight from the chain (no indexer lag right after a buy); prices from the backend.
     const [u, m, s, p] = await Promise.all([
       usdcBalance(address).catch(() => null), monBalance(address).catch(() => null),
-      stockBalances(address).catch(() => ({} as Record<string, number>)),
+      stockBalances(address).catch(() => null),
       api<Record<string, number>>("/api/prices"),
     ]);
-    setUsdc(u); setMon(m); setStocks(s); setPrices(p || {});
+    setUsdc(u); setMon(m); setPrices(p || {});
+    if (s) { setStocks(s); return; }
+    // Chain read failed: use the backend's indexed portfolio instead of showing nothing.
+    const port = await api<{ holdings: { ticker: string; balance: string }[] }>(`/api/portfolio/${address}`);
+    if (port?.holdings) setStocks(Object.fromEntries(port.holdings.map((h) => [h.ticker, Number(h.balance) / 1e18])));
   }, [address]);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -100,8 +104,13 @@ function Dashboard() {
       const label = intent.items.map((i) => `${usd(i.usd)} ${STOCKS[i.ticker] || i.ticker}`).join(" + ");
       pushActivity({ hash, source: intent.source, usd: total, at: Date.now(), label, items: intent.items.map((i) => ({ ticker: i.ticker, usd: i.usd })) });
       setActivity(loadActivity());
-      setToast({ ok: true, text: `Bought ${label}`, hash });
-      setIntentOpen(false); clearParams(); refresh();
+      const got = boughtFromReceipt(rcpt);
+      const gotText = got.length
+        ? got.map((g) => `${g.shares < 0.001 ? g.shares.toPrecision(3) : g.shares.toFixed(4)} ${g.ticker} for ${usd(g.usd)}`).join(", ")
+        : label;
+      setToast({ ok: true, text: `Bought ${gotText} on Monad`, hash });
+      setIntentOpen(false); setTab("holdings"); clearParams();
+      refresh(); setTimeout(refresh, 3000); // RPC nodes can lag a block behind the receipt
     } catch (e) { setToast({ ok: false, text: friendlyError(e) }); } finally { setBusy(""); }
   }
   async function cancelBuy() {
