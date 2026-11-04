@@ -30,12 +30,12 @@ async function render() {
   const total = basket.reduce((a, b) => a + b.usd, 0);
   $("total").textContent = `$${total.toFixed(2)}`;
   $("basket").innerHTML = basket.map((i) => {
-    const deployed = settings.addresses[i.ticker] ? "" : ` <span class="err">(no address)</span>`;
+    const deployed = settings.addresses[i.ticker] ? "" : ` <span class="dim">· soon</span>`;
     return `<div class="row"><span>$${i.usd.toFixed(2)} of ${esc(tickers.stocks[i.ticker]?.company || i.ticker)}${deployed}</span><span class="dim">${esc(i.ticker)}</span></div>`;
   }).join("");
   $("buy").disabled = !basket.length;
 
-  $("usdc").textContent = usdc != null ? `$${usdc.toFixed(2)}` : chainError ? "RPC error" : "—";
+  $("usdc").textContent = usdc != null ? `$${usdc.toFixed(2)}` : chainError ? "Unavailable" : "—";
   if (chainError) $("err").textContent = chainError;
 
   $("history").innerHTML = history.map((h) =>
@@ -48,7 +48,9 @@ async function render() {
 
   for (const k of ["wallet", "dashboardUrl", "backendUrl", "rpcUrl"]) $(k).value = settings[k] || "";
   $("addresses").value = Object.keys(settings.addresses).length ? JSON.stringify(settings.addresses, null, 1) : "";
-  if (!settings.dashboardUrl || !Object.keys(settings.addresses).length) $("cfg").open = true;
+  const w = settings.wallet;
+  $("acct").textContent = w ? `${w.slice(0, 6)}…${w.slice(-4)}` : "Not connected";
+  $("connect").textContent = w ? "Open" : "Connect";
 }
 
 async function act(msg) {
@@ -63,6 +65,13 @@ document.querySelectorAll(".mode button").forEach((b) =>
   b.addEventListener("click", () => act({ type: "SAVE_SETTINGS", patch: { mode: b.dataset.mode } })));
 $("buy").addEventListener("click", async () => { const r = await act({ type: "BUY_SCROLL" }); if (!r?.error) window.close(); });
 $("notNow").addEventListener("click", () => window.close());
+$("connect").addEventListener("click", () => act({ type: "OPEN_DASHBOARD" }));
+// Developer settings stay hidden from users: Alt/Option-click the footer to reveal them.
+$("footer").addEventListener("click", (e) => {
+  if (!e.altKey) return;
+  const cfg = $("cfg"), sec = cfg.closest("section");
+  cfg.hidden = !cfg.hidden; sec.hidden = cfg.hidden; cfg.open = !cfg.hidden;
+});
 $("topup").addEventListener("click", () => act({ type: "TOP_UP" }));
 $("reset").addEventListener("click", () => { if (confirm("Drop this week's unbought amounts?")) act({ type: "RESET_UNBOUGHT" }); });
 $("live").addEventListener("change", (e) => act({ type: "SAVE_SETTINGS", patch: { liveMode: e.target.checked } }));

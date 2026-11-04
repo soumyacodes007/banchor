@@ -38,13 +38,16 @@
     const root = host.attachShadow({ mode: "closed" });
     root.innerHTML = `
       <style>
-        .b{font:600 14px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;
-           background:#200052;border:2px solid #836EF9;border-radius:12px;padding:10px 14px;
-           box-shadow:0 6px 24px rgba(0,0,0,.35);font-variant-numeric:tabular-nums;transition:transform .15s}
+        .b{font:600 14px/1.2 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#075BFF;
+           background:#F7F4ED;border:1.5px solid #075BFF;border-radius:18px;padding:10px 16px 14px;position:relative;overflow:hidden;
+           box-shadow:0 8px 26px rgba(23,43,115,.22);font-variant-numeric:tabular-nums;transition:transform .15s}
+        .b::after{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;
+           background:repeating-conic-gradient(#075BFF 0 25%,transparent 0 50%) 0 0/5px 5px}
         .b.pulse{transform:scale(1.06)}
-        .s{display:block;font-weight:500;font-size:11px;opacity:.75;margin-top:2px}
+        .t{font:400 22px/1 "Instrument Serif",Georgia,serif}
+        .s{display:block;font-weight:500;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#172B73;opacity:.7;margin-top:4px}
       </style>
-      <div class="b"><span class="t">0:00 scrolled</span><span class="s">Doomscroll Dividends · Monad testnet</span></div>`;
+      <div class="b"><span class="t">0:00 scrolled</span><span class="s">Banchor · Monad testnet</span></div>`;
     document.documentElement.appendChild(host);
     badge = { host, box: root.querySelector(".b"), text: root.querySelector(".t") };
     return badge;

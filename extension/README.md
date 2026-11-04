@@ -5,13 +5,15 @@ Manifest V3. It tracks attention, matches highlights to stocks and builds buy in
 ## Install
 
 1. `chrome://extensions` → Developer mode → **Load unpacked** → this folder.
-2. Open the popup → **Settings**, fill in:
-   - Dashboard URL (Vercel)
-   - Backend URL (Railway/Render)
-   - RPC: `https://testnet-rpc.monad.xyz` by default. The PRD's fallbacks `rpc.ankr.com/monad_testnet` and `rpc-testnet.monadinfra.com` are also allowed.
-   - `addresses.json`: paste `backend/addresses.json` exactly as the deploy script writes it.
+2. Before building, fill in `config.json` with the deployment values. Users never see them:
+   - `dashboardUrl` (Vercel)
+   - `backendUrl` (Railway/Render)
+   - `rpcUrl`: `https://testnet-rpc.monad.xyz` by default. The PRD's fallbacks `rpc.ankr.com/monad_testnet` and `rpc-testnet.monadinfra.com` are also allowed.
+   - `addresses`: paste `backend/addresses.json` exactly as the deploy script writes it.
 
-The wallet address is set automatically when the user signs in on the dashboard (see `DD_SET_WALLET` below), or can be pasted.
+The wallet address is set automatically when the user signs in on the dashboard (see `DD_SET_WALLET` below); the popup only shows a **Connect** button.
+
+For local testing you can override `config.json` without rebuilding: **Option/Alt-click the footer** in the popup to reveal the hidden developer settings. Blank fields there fall back to `config.json`.
 
 ## Files
 

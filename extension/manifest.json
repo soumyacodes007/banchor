@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Doomscroll Dividends",
+  "name": "Banchor",
   "version": "0.2.0",
   "description": "Turns your scrolling and anything you highlight into mock xStock buys on Monad testnet.",
   "permissions": ["tabs", "alarms", "idle", "storage", "contextMenus"],
@@ -8,12 +8,14 @@
     "https://testnet-rpc.monad.xyz/*",
     "https://rpc.ankr.com/*",
     "https://rpc-testnet.monadinfra.com/*",
+    "https://*.up.railway.app/*",
+    "https://*.onrender.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
   "optional_host_permissions": ["https://*/*"],
   "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "Doomscroll Dividends" },
+  "action": { "default_popup": "popup.html", "default_title": "Banchor" },
   "icons": { "128": "icons/icon128.png" },
   "content_scripts": [
     {

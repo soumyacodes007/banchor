@@ -17,16 +17,20 @@
     const owned = data.ownedUsd != null ? `You own $${Number(data.ownedUsd).toFixed(2)}` : "";
     root.innerHTML = `
       <style>
-        .c{font:500 13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;background:#200052;
-           border:1px solid #836EF9;border-radius:12px;padding:10px 12px;min-width:240px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
-        .h{display:flex;gap:8px;align-items:baseline;margin-bottom:8px}
-        .t{font-weight:700}.n{opacity:.8}.p{margin-left:auto;font-variant-numeric:tabular-nums}
+        .c{font:500 13px/1.35 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172B73;background:#F7F4ED;
+           border:1.5px solid #075BFF;border-radius:18px;padding:12px 14px 10px;min-width:260px;box-shadow:0 10px 30px rgba(23,43,115,.22);
+           position:relative;overflow:hidden}
+        .c::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;
+           background:repeating-conic-gradient(#075BFF 0 25%,transparent 0 50%) 0 0/6px 6px;opacity:.9}
+        .h{display:flex;gap:8px;align-items:baseline;margin-bottom:10px}
+        .t{font:400 22px/1 "Instrument Serif",Georgia,serif;color:#075BFF}.n{color:#5B6AA3}.p{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600}
         .r{display:flex;gap:6px}
-        button{font:inherit;font-weight:600;border-radius:8px;border:1px solid #836EF9;background:transparent;color:#fff;padding:6px 10px;cursor:pointer}
-        button.on{background:#836EF9}
-        .buy{margin-left:auto;background:#836EF9}
-        .f{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;opacity:.75}
-        .f a{color:#fff;cursor:pointer;text-decoration:underline}
+        button{font:inherit;font-weight:600;border-radius:12px;border:1.5px solid #075BFF;background:#fff;color:#075BFF;padding:6px 11px;cursor:pointer}
+        button:hover{background:#C9D2FF}
+        button.on{background:#C9D2FF}
+        .buy,.buy:hover{margin-left:auto;background:#075BFF;color:#fff}
+        .f{display:flex;justify-content:space-between;margin:10px 0 6px;font-size:11px;color:#5B6AA3}
+        .f a{color:#D34C86;cursor:pointer;text-decoration:underline}
         .msg{margin-top:8px;font-size:12px}
       </style>
       <div class="c" role="dialog" aria-label="Buy ${data.ticker}">

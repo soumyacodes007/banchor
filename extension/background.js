@@ -1,4 +1,4 @@
-// Doomscroll Dividends: background service worker (Manifest V3)
+// Banchor: background service worker (Manifest V3)
 // - Counts minutes per site every 60s (PRD "Counting rules")
 // - Adds Live mode seconds from live.js
 // - Turns earned dollars into buy intents (chunks / weekly / highlight)
@@ -33,9 +33,23 @@ async function tickers() {
 }
 
 // ---------- storage ----------
+// Deployment config shipped with the build (config.json). Users never edit it; values a
+// developer saves from the hidden dev panel override it, but blanks do not.
+let buildConfig = null;
+async function config() {
+  if (!buildConfig) {
+    try { buildConfig = await (await fetch(chrome.runtime.getURL("config.json"))).json(); }
+    catch { buildConfig = {}; }
+  }
+  return buildConfig;
+}
+const INFRA_KEYS = ["dashboardUrl", "backendUrl", "rpcUrl", "addresses"];
+const isBlank = (v) => v == null || v === "" || (typeof v === "object" && !Object.keys(v).length);
 async function getSettings() {
   const { settings } = await chrome.storage.local.get("settings");
-  return { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  const stored = { ...(settings || {}) };
+  for (const k of INFRA_KEYS) if (isBlank(stored[k])) delete stored[k];
+  return { ...DEFAULT_SETTINGS, ...(await config()), ...stored };
 }
 async function setSettings(patch) {
   const s = await getSettings();
@@ -106,7 +120,7 @@ const LIVE_SITES = ["instagram.com", "youtube.com"];
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create("tick", { periodInMinutes: 1 });
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "dd-buy", title: "Buy with Doomscroll Dividends", contexts: ["selection"], visible: false });
+    chrome.contextMenus.create({ id: "dd-buy", title: "Buy with Banchor", contexts: ["selection"], visible: false });
   });
   await getWeek();
 });
@@ -284,7 +298,7 @@ const SOURCES = ["SCROLL", "HIGHLIGHT", "COPY", "GIFT"];
 async function createIntent(items, source) {
   if (!SOURCES.includes(source)) throw new Error("bad source");
   const settings = await getSettings();
-  if (!settings.dashboardUrl) throw new Error("Dashboard URL not set");
+  if (!settings.dashboardUrl) throw new Error("Banchor isn't configured yet — dashboard link missing");
   const priced = [];
   for (const it of items) {
     const stock = settings.addresses[it.ticker];
@@ -443,10 +457,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const intent = await createIntent(basket, "SCROLL");
         return { ok: true, intentId: intent.id };
       }
+      case "OPEN_DASHBOARD": {
+        const s = await getSettings();
+        if (!s.dashboardUrl) throw new Error("Banchor isn't configured yet — dashboard link missing");
+        await chrome.tabs.create({ url: `${s.dashboardUrl.replace(/\/$/, "")}/dashboard` });
+        return { ok: true };
+      }
       case "TOP_UP": {
         // PRD: sponsored MockUSDC.faucet() — signed by the user's account in the dashboard.
         const s = await getSettings();
-        if (!s.dashboardUrl) throw new Error("Dashboard URL not set");
+        if (!s.dashboardUrl) throw new Error("Banchor isn't configured yet — dashboard link missing");
         await chrome.tabs.create({ url: `${s.dashboardUrl.replace(/\/$/, "")}/dashboard?topup=50` });
         return { ok: true };
       }

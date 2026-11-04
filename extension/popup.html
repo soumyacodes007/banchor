@@ -2,48 +2,87 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#0E0B1A; --card:#1A1530; --line:#2E2650; --text:#F4F2FF; --dim:#A49CC8; --accent:#836EF9; }
+    :root { --bg:#F7F4ED; --card:#FFFFFF; --line:#D9DDF5; --text:#172B73; --dim:#5B6aa3; --accent:#075BFF;
+            --peri:#C9D2FF; --mag:#D34C86; --r:16px; }
     * { box-sizing:border-box; }
-    body { margin:0; width:340px; background:var(--bg); color:var(--text);
-           font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    header { display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--line); }
-    header h1 { font-size:14px; margin:0; }
-    .mode { margin-left:auto; display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
-    .mode button { background:none; border:0; color:var(--dim); padding:4px 10px; font:inherit; cursor:pointer; }
+    html { background:var(--bg); }
+    .app { border:2px solid var(--accent); border-radius:22px; padding:10px; background:var(--bg); overflow:hidden; }
+    body { margin:0; width:372px; background:var(--bg); color:var(--text); padding:6px !important;
+           font:13px/1.45 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; padding:10px; }
+    .hero { position:relative; border-radius:20px; overflow:hidden; border:1.5px solid var(--accent); background:var(--bg); height:150px; }
+    .hero canvas { position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; }
+    .hero .brand { position:absolute; z-index:1; left:14px; top:12px; display:flex; flex-direction:column; gap:2px; }
+    .hero h1 { margin:0; font:400 36px/1 "Instrument Serif",Georgia,serif; color:var(--accent); letter-spacing:-.3px;
+               background:rgba(247,244,237,.88); padding:4px 8px 2px; border-radius:10px; }
+    .hero small { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--text);
+                  background:rgba(247,244,237,.88); padding:2px 8px; border-radius:8px; align-self:flex-start; }
+    .mode { position:absolute; z-index:1; left:14px; bottom:12px; display:flex; background:var(--card); border:1.5px solid var(--accent); border-radius:999px; padding:2px; }
+    .mode button { background:none; border:0; color:var(--accent); padding:4px 11px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; border-radius:999px; }
     .mode button.on { background:var(--accent); color:#fff; }
-    section { padding:12px 14px; border-bottom:1px solid var(--line); }
-    .row { display:flex; justify-content:space-between; padding:4px 0; font-variant-numeric:tabular-nums; }
+    section { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; margin-top:10px; }
+    .row { display:flex; justify-content:space-between; gap:8px; padding:5px 0; font-variant-numeric:tabular-nums; }
+    .row + .row { border-top:1px dashed var(--line); }
     .dim { color:var(--dim); }
-    .big { font-size:22px; font-weight:700; }
-    .btns { display:flex; gap:8px; margin-top:10px; }
-    .btns button, .full { flex:1; padding:9px; border-radius:9px; border:1px solid var(--accent); background:none; color:var(--text); font:inherit; font-weight:600; cursor:pointer; }
-    .primary { background:var(--accent) !important; color:#fff; }
-    button:disabled { opacity:.5; cursor:default; }
-    label.t { display:flex; justify-content:space-between; align-items:center; padding:4px 0; }
-    details summary { cursor:pointer; color:var(--dim); }
-    input[type=text], textarea { width:100%; background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:6px; padding:6px; font:12px ui-monospace,monospace; margin:3px 0 8px; }
-    textarea { height:70px; }
-    .err { color:#FF8A8A; font-size:12px; }
-    a { color:var(--accent); }
+    .label { font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); font-weight:600; }
+    .big { font:400 40px/1.05 "Instrument Serif",Georgia,serif; color:var(--accent); margin:2px 0 4px; }
+    .btns { display:flex; gap:8px; margin-top:12px; }
+    .btns button, .full { flex:1; padding:9px 12px; border-radius:12px; border:1.5px solid var(--accent); background:var(--card);
+                          color:var(--accent); font:inherit; font-weight:600; cursor:pointer; transition:transform .1s, background .15s; }
+    .btns button:hover, .full:hover { background:var(--peri); }
+    .btns button:active, .full:active { transform:translateY(1px); }
+    .primary { background:var(--accent) !important; color:#fff !important; }
+    .primary:hover { background:#0047d6 !important; }
+    .full { width:100%; }
+    button:disabled { opacity:.45; cursor:default; }
+    label.t { display:flex; justify-content:space-between; align-items:center; padding:6px 0; cursor:pointer; }
+    label.t + label.t { border-top:1px dashed var(--line); }
+    input[type=checkbox] { appearance:none; width:34px; height:20px; border-radius:999px; background:var(--peri); position:relative; cursor:pointer; flex:none; transition:background .15s; margin:0; }
+    input[type=checkbox]::after { content:""; position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%; background:#fff; transition:left .15s; box-shadow:0 1px 2px rgba(23,43,115,.3); }
+    input[type=checkbox]:checked { background:var(--accent); }
+    input[type=checkbox]:checked::after { left:17px; }
+    details summary { cursor:pointer; color:var(--accent); font-weight:600; list-style:none; }
+    details summary::before { content:"＋ "; }
+    details[open] summary::before { content:"－ "; }
+    input[type=text], textarea { width:100%; background:var(--bg); border:1.5px solid var(--line); color:var(--text); border-radius:10px; padding:7px 9px; font:12px ui-monospace,monospace; margin:3px 0 8px; outline:none; }
+    input[type=text]:focus, textarea:focus { border-color:var(--accent); }
+    textarea { height:70px; resize:vertical; }
+    .err { color:var(--mag); font-size:12px; }
+    .err:empty { display:none; }
+    a { color:var(--accent); font-weight:600; }
     .empty { color:var(--dim); padding:6px 0; }
+    .pill { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:#E7F6EC; color:#1E7A3E; }
+    .pill::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .strip { display:block; width:100%; height:16px; margin-top:12px; border-radius:6px; image-rendering:pixelated; }
+    .acct { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-bottom:8px; margin-bottom:4px; border-bottom:1px dashed var(--line); }
+    .addr { font:600 13px ui-monospace,monospace; margin-top:2px; }
+    .chip { padding:5px 12px; border-radius:999px; border:1.5px solid var(--accent); background:var(--card); color:var(--accent); font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+    .chip:hover { background:var(--peri); }
+    #cfg[hidden], section[hidden] { display:none; }
+    footer { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:10px; letter-spacing:.14em; color:var(--accent); font-weight:600; }
+    footer canvas { width:44px; height:12px; image-rendering:pixelated; }
+    footer span.line { flex:1; height:1px; background:var(--accent); }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Doomscroll Dividends</h1>
+<div class="app">
+  <div class="hero">
+    <canvas data-dither="clouds" data-seed="11" data-px="2" data-tentacle="1"></canvas>
+    <div class="brand"><h1>BANCHOR</h1><small>Monad testnet</small></div>
     <div class="mode" role="group" aria-label="Mode">
       <button data-mode="roast">Roast</button><button data-mode="detox">Detox</button>
     </div>
-  </header>
+  </div>
 
   <section>
-    <div class="dim">This week</div>
+    <div class="label">This week</div>
     <div id="sites"></div>
   </section>
 
   <section>
-    <div class="dim" id="buyLabel">Ready to buy</div>
+    <div class="label" id="buyLabel">Ready to buy</div>
     <div class="big" id="total">$0.00</div>
     <div id="basket"></div>
     <div class="btns">
@@ -51,11 +90,16 @@
       <button id="buy" class="primary">Buy my scroll</button>
     </div>
     <div class="err" id="err"></div>
+    <canvas class="strip" data-dither="strip" data-seed="4" data-px="2"></canvas>
   </section>
 
   <section>
-    <div class="row"><span>Wallet USDC <span class="dim">(Monad testnet)</span></span><span id="usdc">—</span></div>
-    <button class="full" id="topup" style="margin-top:6px">Top up $50</button>
+    <div class="acct">
+      <div><div class="label">Wallet</div><div id="acct" class="addr">Not connected</div></div>
+      <button id="connect" class="chip">Connect</button>
+    </div>
+    <div class="row"><span>Balance <span class="dim">USDC</span></span><span id="usdc">—</span></div>
+    <button class="full" id="topup" style="margin-top:8px">Top up $50</button>
     <div id="history"></div>
   </section>
 
@@ -66,9 +110,9 @@
     <div class="btns"><button id="reset">Reset unbought</button></div>
   </section>
 
-  <section>
-    <details id="cfg">
-      <summary>Settings</summary>
+  <section hidden>
+    <details id="cfg" hidden>
+      <summary>Developer settings</summary>
       <div class="dim" style="margin-top:8px">Wallet address</div>
       <input type="text" id="wallet" placeholder="0x… (set automatically when you sign in on the dashboard)">
       <div class="dim">Dashboard URL</div>
@@ -84,6 +128,10 @@
     </details>
   </section>
 
+  <footer id="footer" title=""><canvas data-dither="strip" data-seed="9" data-px="2"></canvas><span class="line"></span>BANCHOR — 2026</footer>
+
+  <script src="dither.js"></script>
   <script src="popup.js"></script>
+</div>
 </body>
 </html>
