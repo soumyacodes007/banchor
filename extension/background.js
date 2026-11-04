@@ -460,7 +460,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "OPEN_DASHBOARD": {
         const s = await getSettings();
         if (!s.dashboardUrl) throw new Error("Banchor isn't configured yet — dashboard link missing");
-        await chrome.tabs.create({ url: `${s.dashboardUrl.replace(/\/$/, "")}/dashboard` });
+        // signin=mera asks the dashboard to start Mera (Monad's passkey wallet) right away.
+        // Mera passkeys are bound to the dashboard's hostname, so sign-in can't run in the
+        // extension itself; the dashboard reports the address back via DD_SET_WALLET.
+        const q = msg.signin ? "?signin=mera" : "";
+        await chrome.tabs.create({ url: `${s.dashboardUrl.replace(/\/$/, "")}/dashboard${q}` });
         return { ok: true };
       }
       case "TOP_UP": {

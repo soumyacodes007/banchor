@@ -3,7 +3,13 @@
   "name": "Banchor",
   "version": "0.2.0",
   "description": "Turns your scrolling and anything you highlight into mock xStock buys on Monad testnet.",
-  "permissions": ["tabs", "alarms", "idle", "storage", "contextMenus"],
+  "permissions": [
+    "tabs",
+    "alarms",
+    "idle",
+    "storage",
+    "contextMenus"
+  ],
   "host_permissions": [
     "https://testnet-rpc.monad.xyz/*",
     "https://rpc.ankr.com/*",
@@ -13,24 +19,54 @@
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
-  "optional_host_permissions": ["https://*/*"],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "Banchor" },
-  "icons": { "128": "icons/icon128.png" },
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Banchor",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
-      "matches": ["https://www.instagram.com/*", "https://www.youtube.com/*"],
-      "js": ["live.js"],
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "live.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["highlight.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "highlight.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
   "externally_connectable": {
-    "matches": ["https://*.vercel.app/*", "http://localhost/*", "http://127.0.0.1/*"]
+    "matches": [
+      "https://*.vercel.app/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
   }
 }

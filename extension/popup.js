@@ -49,8 +49,10 @@ async function render() {
   for (const k of ["wallet", "dashboardUrl", "backendUrl", "rpcUrl"]) $(k).value = settings[k] || "";
   $("addresses").value = Object.keys(settings.addresses).length ? JSON.stringify(settings.addresses, null, 1) : "";
   const w = settings.wallet;
-  $("acct").textContent = w ? `${w.slice(0, 6)}…${w.slice(-4)}` : "Not connected";
-  $("connect").textContent = w ? "Open" : "Connect";
+  $("acct").innerHTML = w ? `${esc(w.slice(0, 6))}…${esc(w.slice(-4))}<span class="ok">Mera</span>` : "Not connected";
+  $("connect").hidden = !w;
+  $("passkey").hidden = !!w;
+  $("passkeyHint").hidden = !!w;
 }
 
 async function act(msg) {
@@ -66,6 +68,7 @@ document.querySelectorAll(".mode button").forEach((b) =>
 $("buy").addEventListener("click", async () => { const r = await act({ type: "BUY_SCROLL" }); if (!r?.error) window.close(); });
 $("notNow").addEventListener("click", () => window.close());
 $("connect").addEventListener("click", () => act({ type: "OPEN_DASHBOARD" }));
+$("passkey").addEventListener("click", () => act({ type: "OPEN_DASHBOARD", signin: true }));
 // Developer settings stay hidden from users: Alt/Option-click the footer to reveal them.
 $("footer").addEventListener("click", (e) => {
   if (!e.altKey) return;

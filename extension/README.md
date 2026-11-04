@@ -11,7 +11,20 @@ Manifest V3. It tracks attention, matches highlights to stocks and builds buy in
    - `rpcUrl`: `https://testnet-rpc.monad.xyz` by default. The PRD's fallbacks `rpc.ankr.com/monad_testnet` and `rpc-testnet.monadinfra.com` are also allowed.
    - `addresses`: paste `backend/addresses.json` exactly as the deploy script writes it.
 
-The wallet address is set automatically when the user signs in on the dashboard (see `DD_SET_WALLET` below); the popup only shows a **Connect** button.
+The wallet address is set automatically when the user signs in on the dashboard (see `DD_SET_WALLET` below); the popup shows a **Continue with Mera** button that opens `DASHBOARD/dashboard?signin=mera`.
+
+### Sign-in with Mera (dashboard side)
+
+[Mera](https://docs.monad.xyz/guides/mera) is Monad's free passkey wallet library (`@category-labs/mera`). It derives a normal EVM account from a passkey via the WebAuthn PRF extension. A Mera passkey is bound to the `rpId` (hostname) that created it, so it must run on the dashboard, never in the extension: an extension passkey would belong to `chrome-extension://…` and give a different account.
+
+On `?signin=mera` the dashboard should:
+
+1. `npm install @category-labs/mera viem @scure/bip32 @scure/bip39`
+2. New user: `createPasskeyWithPrfOutput({ rp: { id: location.hostname, name: "Banchor" }, user })`. Returning user: `getPasskeyPrfOutput({ rpId: location.hostname, credential })`.
+3. Derive the key from `prfOutput` (BIP-39 → `m/44'/60'/0'/0/0`), wrap it with `createSecp256k1SigningSession` + `toViemAccount`, and read `account.address`.
+4. Send it to the extension: `chrome.runtime.sendMessage(EXTENSION_ID, { type: "DD_SET_WALLET", address })`.
+
+Notes: the dashboard domain must never change, or users lose access to the account (only the exported 24-word phrase recovers it). On desktop Chrome only passkeys saved in Google Password Manager return PRF. Set `gas` explicitly on Monad transactions.
 
 For local testing you can override `config.json` without rebuilding: **Option/Alt-click the footer** in the popup to reveal the hidden developer settings. Blank fields there fall back to `config.json`.
 

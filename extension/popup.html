@@ -60,6 +60,12 @@
     .addr { font:600 13px ui-monospace,monospace; margin-top:2px; }
     .chip { padding:5px 12px; border-radius:999px; border:1.5px solid var(--accent); background:var(--card); color:var(--accent); font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
     .chip:hover { background:var(--peri); }
+    .passkey { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:11px; margin:6px 0 4px;
+               border-radius:14px; border:0; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+    .passkey:hover { background:#0047d6; }
+    .passkey[hidden], .hint[hidden], .chip[hidden] { display:none; }
+    .hint { font-size:11.5px; text-align:center; margin-bottom:6px; }
+    .ok { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; color:#1E7A3E; background:#E7F6EC; border-radius:999px; padding:1px 7px; margin-left:6px; vertical-align:middle; }
     #cfg[hidden], section[hidden] { display:none; }
     footer { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:10px; letter-spacing:.14em; color:var(--accent); font-weight:600; }
     footer canvas { width:44px; height:12px; image-rendering:pixelated; }
@@ -96,8 +102,13 @@
   <section>
     <div class="acct">
       <div><div class="label">Wallet</div><div id="acct" class="addr">Not connected</div></div>
-      <button id="connect" class="chip">Connect</button>
+      <button id="connect" class="chip">Open</button>
     </div>
+    <button id="passkey" class="passkey" hidden>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 11v3a8 8 0 0 1-1.2 4.2M8.5 7.3A5 5 0 0 1 17 11v1.5M7 11a5 5 0 0 1 .3-1.7M5 15.5c.6-1.4 1-2.9 1-4.5a6 6 0 0 1 .7-2.8M17 15.5c-.2 1.3-.6 2.6-1.1 3.7M14.8 11.5v.5a12 12 0 0 1-1.6 6M9.6 11a2.4 2.4 0 0 1 4.8 0M19 7.5A9 9 0 0 0 3.9 6.5"/></svg>
+      Continue with Mera
+    </button>
+    <div class="dim hint" id="passkeyHint" hidden>Passkey wallet by Monad · Touch ID, no seed phrase</div>
     <div class="row"><span>Balance <span class="dim">USDC</span></span><span id="usdc">—</span></div>
     <button class="full" id="topup" style="margin-top:8px">Top up $50</button>
     <div id="history"></div>
