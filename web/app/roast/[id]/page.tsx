@@ -17,9 +17,8 @@ type Roast = {
   lines: { headline: string; thanks: string | null; highlight: string | null; x: string | null; detox: string | null; copies: string | null };
 };
 // GET /api/copy/:address?usd= — basket args ready for approve + buyBasket
+type Portfolio = { totalUsd: string; holdings: { ticker: string; usd: string }[] };
 type CopyArgs = { stocks: `0x${string}`[]; amounts: string[]; total: string; totalUsd: string; ref: `0x${string}`; items: { ticker: string }[] };
-// GET /api/portfolio/:address — everything the wallet holds, however it was bought.
-type Portfolio = { holdings: { ticker: string; usd: string }[] };
 const COPY_USD = 5;
 
 export default function RoastPage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,19 +34,25 @@ export default function RoastPage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     setMe(savedWallet()?.address ?? null);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) { setLoaded(true); return; }
     Promise.all([api<Roast>(`/api/roast/${address}`), api<Portfolio>(`/api/portfolio/${address}`)])
       .then(([r, p]) => { setRoast(r); setPortfolio(p); setLoaded(true); });
   }, [address]);
 
-  // Copy mirrors the whole wallet, so a highlight or Analyze buy counts too.
-  const holdings = portfolio?.holdings ?? [];
-  const minutesOf = (ticker: string) => roast?.stocks.find((s) => s.ticker === ticker)?.minutes ?? 0;
+  // What the wallet actually holds on-chain (what /api/copy mirrors), with scroll minutes from the roast.
+  const minutes = Object.fromEntries((roast?.stocks || []).map((s) => [s.ticker, s.minutes]));
+  const holdings = (portfolio?.holdings || []).map((h) => ({
+    ticker: h.ticker, company: STOCKS[h.ticker] || roast?.stocks.find((s) => s.ticker === h.ticker)?.company || h.ticker,
+    minutes: minutes[h.ticker] ?? 0, ownedUsd: h.usd,
+  }));
 
   async function copyBasket() {
     setBusy("Building basket…"); setMsg(null);
     try {
       const args = await api<CopyArgs>(`/api/copy/${address}?usd=${COPY_USD}`);
       if (!args?.stocks?.length) throw new Error("This basket is empty, nothing to copy yet.");
+      const bal = me ? await usdcBalance(me).catch(() => null) : null;
+      if (bal != null && bal * 1e6 < Number(args.total)) throw new Error(`Not enough USDC. Top up on your dashboard first.`);
       const intent = {
         id: crypto.randomUUID(), chainId: chain.id, source: "COPY" as const, ref: args.ref, createdAt: Date.now(),
         items: args.stocks.map((stock, i) => ({ ticker: args.items[i]?.ticker ?? "", stock, usdc: args.amounts[i], usd: Number(args.amounts[i]) / 1e6 })),
@@ -89,7 +94,7 @@ export default function RoastPage({ params }: { params: Promise<{ id: string }> 
         <section className="card c7">
           <div className="label">The basket</div>
           {holdings.length ? holdings.map((h) => (
-            <div className="row" key={h.ticker}><span>{STOCKS[h.ticker] || h.ticker} <span className="dim">{h.ticker}{minutesOf(h.ticker) > 0 ? ` · ${Math.round(minutesOf(h.ticker))} min` : ""}</span></span><span>{h.usd}</span></div>
+            <div className="row" key={h.ticker}><span>{h.company} <span className="dim">{h.ticker}{h.minutes ? ` · ${Math.round(h.minutes)} min` : ""}</span></span><span>{h.ownedUsd}</span></div>
           )) : <p className="empty">{loaded ? "Nothing bought yet. Suspiciously productive." : "…"}</p>}
           {[roast?.lines.highlight, roast?.lines.x, roast?.lines.detox].filter(Boolean).map((l) => <p key={l!} className="dim">{l}</p>)}
         </section>

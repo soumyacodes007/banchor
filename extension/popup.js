@@ -11,7 +11,28 @@ function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 async function render() {
   const st = await send({ type: "POPUP_STATE" });
   if (st?.error) { $("err").textContent = st.error; return; }
-  const { settings, week, basket, history, usdc, chainError, tickers } = st;
+  const { settings, week, basket, history, usdc, chainError, tickers, session } = st;
+
+  // Rate
+  const rate = Number(settings.scrollUsdPerMin) || 0.1;
+  document.querySelectorAll(".rates button").forEach((b) => {
+    const on = Math.abs(Number(b.dataset.rate) - rate) < 1e-9;
+    b.classList.toggle("on", on); b.setAttribute("aria-checked", on);
+  });
+  if (document.activeElement !== $("rateCustom")) $("rateCustom").value = rate.toFixed(2);
+  $("rateHint").textContent = `$${(rate * 60).toFixed(2)} / hour`;
+
+  // Start / Stop
+  const on = !!session?.active;
+  $("start").classList.toggle("on", on);
+  $("start").textContent = on ? "■ Stop tracking" : "▶ Start";
+  $("start").disabled = !settings.wallet && !on;
+  $("start").title = settings.wallet ? "" : "Connect your wallet first";
+  $("sessionInfo").hidden = !on && !!settings.wallet;
+  if (!on) $("sessionText").textContent = "Connect your wallet below to start";
+  tickerInfo = tickers;
+  liveSession(on);
+  document.querySelector("#sessionInfo .rec").hidden = !on;
 
   document.querySelectorAll(".mode button").forEach((b) => b.classList.toggle("on", b.dataset.mode === settings.mode));
 
@@ -55,6 +76,38 @@ async function render() {
   $("passkeyHint").hidden = !!w;
 }
 
+// Live session readout: clock ticks every second, dollars climb as seconds are counted.
+let sessionTimer = null, tickerInfo = null;
+const companyOf = (t) => tickerInfo?.stocks?.[t]?.company || t;
+function liveSession(on) {
+  clearInterval(sessionTimer);
+  $("sessionLive").hidden = !on;
+  if (!on) return;
+  const pad = (n) => String(n).padStart(2, "0");
+  const draw = async () => {
+    const st = await send({ type: "SESSION_STATE" });
+    if (!st?.active) return;
+    const sec = Math.floor((Date.now() - st.startedAt) / 1000);
+    $("sessionText").textContent = "Tracking · close this and just scroll";
+    $("sessionClock").textContent = `${pad(Math.floor(sec / 60))}:${pad(sec % 60)}`;
+    $("sessionUsd").textContent = `$${st.total.toFixed(4)}`;
+    $("sessionItems").innerHTML = st.items.length
+      ? st.items.map((i) => `<div class="row"><span>${esc(i.company)} <span class="dim">${esc(i.ticker)} · ${Math.floor(i.seconds / 60)}:${pad(Math.floor(i.seconds % 60))}</span></span><span>$${i.usd.toFixed(4)}</span></div>`).join("")
+      : `<div class="empty">Open X, Instagram or YouTube and scroll.</div>`;
+    // One tap: buy everything earned and not yet bought (opens the dashboard to confirm with passkey).
+    const b = $("sessionBuy");
+    if (!b.dataset.busy) {
+      const top = st.basket[0];
+      b.disabled = !st.basket.length;
+      b.textContent = !st.basket.length ? "Keep scrolling…"
+        : st.basket.length === 1 ? `Buy $${top.usd.toFixed(2)} of ${companyOf(top.ticker)}`
+        : `Buy $${st.basketUsd.toFixed(2)} of ${st.basket.length} stocks`;
+    }
+  };
+  draw();
+  sessionTimer = setInterval(draw, 1000);
+}
+
 async function act(msg) {
   $("err").textContent = "";
   const res = await send(msg);
@@ -66,6 +119,26 @@ async function act(msg) {
 document.querySelectorAll(".mode button").forEach((b) =>
   b.addEventListener("click", () => act({ type: "SAVE_SETTINGS", patch: { mode: b.dataset.mode } })));
 $("buy").addEventListener("click", async () => { const r = await act({ type: "BUY_SCROLL" }); if (!r?.error) window.close(); });
+const setRate = (v) => {
+  const n = Math.round(Number(v) * 100) / 100;
+  if (!(n >= 0.01 && n <= 10)) { $("err").textContent = "Rate must be $0.01 to $10 per minute"; return; }
+  act({ type: "SAVE_SETTINGS", patch: { scrollUsdPerMin: n } });
+};
+document.querySelectorAll(".rates button").forEach((b) => b.addEventListener("click", () => setRate(b.dataset.rate)));
+$("rateCustom").addEventListener("change", (e) => setRate(e.target.value));
+
+$("sessionBuy").addEventListener("click", async () => {
+  const b = $("sessionBuy");
+  b.dataset.busy = "1"; b.disabled = true; b.textContent = "Opening dashboard…"; $("sessionErr").textContent = "";
+  const r = await send({ type: "BUY_SCROLL" });
+  if (r?.error) { $("sessionErr").textContent = r.error; delete b.dataset.busy; b.disabled = false; }
+  else window.close();
+});
+$("start").addEventListener("click", async () => {
+  const on = $("start").classList.contains("on");
+  const r = await act({ type: on ? "SESSION_STOP" : "SESSION_START" });
+  if (!on && !r?.error) window.close(); // started: get out of the way
+});
 $("notNow").addEventListener("click", () => window.close());
 $("connect").addEventListener("click", () => act({ type: "OPEN_DASHBOARD" }));
 $("passkey").addEventListener("click", () => act({ type: "OPEN_DASHBOARD", signin: true }));
@@ -78,7 +151,13 @@ $("footer").addEventListener("click", (e) => {
 $("topup").addEventListener("click", () => act({ type: "TOP_UP" }));
 
 // One-click research: reads the open page and suggests what to buy. Buying is a separate tap.
+function endResearch() {
+  document.querySelector(".app").classList.remove("research");
+  $("analysis").hidden = true;
+  $("analyze").hidden = false;
+}
 function renderAnalysis(a) {
+  $("analyze").hidden = true;
   const total = a.picks.reduce((sum, p) => sum + p.usd, 0);
   const note = a.source === "saved" ? "Saved analysis" : "AI analysis";
   $("analysis").hidden = false;
@@ -87,7 +166,9 @@ function renderAnalysis(a) {
     <p class="dim">${esc(a.summary)}</p>
     ${a.picks.map((p) => `<div class="pick"><div class="row"><span>Buy $${esc(p.usd)} of ${esc(p.company)}</span><span class="dim">${esc(p.ticker)}</span></div><div class="dim">${esc(p.reason)}</div></div>`).join("")}
     ${a.picks.length ? `<button class="full primary" id="analysisBuy">Buy $${esc(total)} of these</button>` : `<div class="empty">No Banchor stocks on this page.</div>`}
+    <button class="full" id="analysisDone" style="margin-top:8px">Done</button>
     <div class="fine">${note} · Mock stocks on testnet · Not financial advice</div>`;
+  $("analysisDone").addEventListener("click", endResearch);
   $("analysisBuy")?.addEventListener("click", async () => {
     $("analyzeErr").textContent = "";
     const res = await send({ type: "ANALYSIS_BUY", picks: a.picks });
@@ -101,10 +182,12 @@ $("analyze").addEventListener("click", async () => {
   $("analysis").hidden = true;
   button.disabled = true;
   button.textContent = "Reading this page…";
+  // Research is one flow, so the rest of the popup steps aside for it.
+  document.querySelector(".app").classList.add("research");
   const res = await send({ type: "ANALYZE_PAGE" });
   button.disabled = false;
   button.textContent = "Analyze this page";
-  if (res?.error) $("analyzeErr").textContent = res.error;
+  if (res?.error) { endResearch(); $("analyzeErr").textContent = res.error; }
   else renderAnalysis(res);
 });
 $("reset").addEventListener("click", () => { if (confirm("Drop this week's unbought amounts?")) act({ type: "RESET_UNBOUGHT" }); });

@@ -72,6 +72,8 @@ export function friendlyError(e: unknown): string {
   }
   const msg = e instanceof Error ? e.message : String(e);
   // Monad's RPC says "Signer had insufficient balance", under a generic viem message.
-  if (/insufficient (funds|balance)/i.test(msg)) return "Not enough MON for gas. Get test MON at faucet.monad.xyz.";
+  if (/insufficient (funds|balance)|missing or invalid parameters/i.test(msg)) return "Not enough MON for gas. Get test MON at faucet.monad.xyz.";
+  // Never show a node's raw network errors to a user.
+  if (/upstream|not valid JSON|rate limit|HTTP request failed|fetch failed|timed? ?out|\b50[234]\b/i.test(msg)) return "Monad's network is busy. Try again in a moment.";
   return msg.split("\n")[0];
 }

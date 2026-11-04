@@ -62,7 +62,8 @@
     .chip:hover { background:var(--peri); }
     .idea { font:400 26px/1.1 "Instrument Serif",Georgia,serif; color:var(--accent); margin-top:12px; }
     #analysis p { margin:6px 0 8px; }
-    #analysis[hidden] { display:none; }
+    #analysis[hidden], #analyze[hidden] { display:none; }
+    .app.research > :not(.hero):not(#research):not(footer):not(script) { display:none; }
     .pick { padding:6px 0; border-top:1px dashed var(--line); font-size:12px; }
     .pick .row { padding:0 0 2px; font-size:13px; font-weight:600; }
     .fine { margin-top:8px; font-size:10.5px; color:var(--dim); text-align:center; }
@@ -73,6 +74,24 @@
     .hint { font-size:11.5px; text-align:center; margin-bottom:6px; }
     .ok { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; color:#1E7A3E; background:#E7F6EC; border-radius:999px; padding:1px 7px; margin-left:6px; vertical-align:middle; }
     #cfg[hidden], section[hidden] { display:none; }
+    .start { width:100%; margin-top:10px; padding:16px; border:0; border-radius:16px; background:var(--accent); color:#fff;
+             font:600 17px Inter,sans-serif; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; }
+    .start:hover { background:#0047d6; }
+    .start.on { background:var(--card); color:var(--accent); border:1.5px solid var(--accent); font-size:14px; padding:12px; }
+    .start.on:hover { background:var(--peri); }
+    .session { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:6px; font-size:12px; color:var(--dim); }
+    .session[hidden] { display:none; }
+    .rec { width:8px; height:8px; border-radius:50%; background:#1E7A3E; box-shadow:0 0 0 3px #E7F6EC; }
+    .rates { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px; }
+    .rates button { display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 4px; border-radius:12px; border:1.5px solid var(--line);
+                    background:var(--card); color:var(--text); font:600 12px Inter,sans-serif; cursor:pointer; }
+    .rates button small { font-weight:500; font-size:10.5px; color:var(--dim); }
+    .rates button:hover { border-color:var(--accent); }
+    .rates button.on { border-color:var(--accent); background:var(--accent); color:#fff; }
+    .rates button.on small { color:rgba(255,255,255,.85); }
+    .custom { display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; }
+    .custom input { width:70px; margin:0; padding:5px 7px; font:600 12px Inter,sans-serif; border:1.5px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); }
+    .custom input:focus { border-color:var(--accent); outline:none; }
     footer { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:10px; letter-spacing:.14em; color:var(--accent); font-weight:600; }
     footer canvas { width:44px; height:12px; image-rendering:pixelated; }
     footer span.line { flex:1; height:1px; background:var(--accent); }
@@ -88,12 +107,35 @@
     </div>
   </div>
 
-  <section>
+  <section id="research">
     <div class="label">Research</div>
     <button class="full primary" id="analyze" style="margin-top:8px">Analyze this page</button>
-    <div class="fine">Sends this page to Banchor to read, only when you tap.</div>
     <div id="analysis" hidden></div>
     <div class="err" id="analyzeErr"></div>
+  </section>
+
+  <section>
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <div class="label">How aggressive?</div><div class="dim" id="rateHint">$6.00 / hour</div>
+    </div>
+    <div class="rates" role="radiogroup" aria-label="Buy rate">
+      <button data-rate="0.05" role="radio">Chill<small>$0.05/min</small></button>
+      <button data-rate="0.10" role="radio">Normal<small>$0.10/min</small></button>
+      <button data-rate="0.50" role="radio">Aggressive<small>$0.50/min</small></button>
+      <button data-rate="1.00" role="radio">YOLO<small>$1/min</small></button>
+    </div>
+    <div class="custom"><span class="dim">Custom $</span><input type="number" id="rateCustom" min="0.01" max="10" step="0.01" inputmode="decimal"><span class="dim">per minute</span></div>
+  </section>
+  <button id="start" class="start">▶ Start</button>
+  <div id="sessionInfo" class="session" hidden><span class="rec"></span><span id="sessionText">Tracking in the background</span></div>
+  <section id="sessionLive" hidden>
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <div><div class="label">This session</div><div class="big" id="sessionUsd">$0.0000</div></div>
+      <div class="big" id="sessionClock" style="font-variant-numeric:tabular-nums">00:00</div>
+    </div>
+    <div id="sessionItems"></div>
+    <button id="sessionBuy" class="start" style="margin-top:12px" disabled>Keep scrolling…</button>
+    <div class="err" id="sessionErr"></div>
   </section>
 
   <section>
@@ -124,7 +166,7 @@
     </button>
     <div class="dim hint" id="passkeyHint" hidden>Passkey wallet by Monad · Touch ID, no seed phrase</div>
     <div class="row"><span>Balance <span class="dim">USDC</span></span><span id="usdc">—</span></div>
-    <button class="full" id="topup" style="margin-top:8px">Top up $50</button>
+    <button class="full" id="topup" style="margin-top:8px">Top up $1,000</button>
     <div id="history"></div>
   </section>
 

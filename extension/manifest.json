@@ -8,7 +8,8 @@
     "alarms",
     "idle",
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "scripting"
   ],
   "host_permissions": [
     "https://testnet-rpc.monad.xyz/*",
@@ -17,7 +18,21 @@
     "https://*.up.railway.app/*",
     "https://*.onrender.com/*",
     "http://localhost/*",
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "https://*.amazon.com/*",
+    "https://*.facebook.com/*",
+    "https://*.instagram.com/*",
+    "https://*.netflix.com/*",
+    "https://*.twitter.com/*",
+    "https://*.x.com/*",
+    "https://*.youtube.com/*",
+    "https://amazon.com/*",
+    "https://facebook.com/*",
+    "https://instagram.com/*",
+    "https://netflix.com/*",
+    "https://twitter.com/*",
+    "https://x.com/*",
+    "https://youtube.com/*"
   ],
   "optional_host_permissions": [
     "https://*/*"
@@ -60,6 +75,39 @@
       ],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": [
+        "https://*.vercel.app/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "announce.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://*.amazon.com/*",
+        "https://*.facebook.com/*",
+        "https://*.instagram.com/*",
+        "https://*.netflix.com/*",
+        "https://*.twitter.com/*",
+        "https://*.x.com/*",
+        "https://*.youtube.com/*",
+        "https://amazon.com/*",
+        "https://facebook.com/*",
+        "https://instagram.com/*",
+        "https://netflix.com/*",
+        "https://twitter.com/*",
+        "https://x.com/*",
+        "https://youtube.com/*"
+      ],
+      "js": [
+        "nudge.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "externally_connectable": {
