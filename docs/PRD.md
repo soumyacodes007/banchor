@@ -83,6 +83,35 @@ An empty wallet kills every loop above, so top-up lives everywhere a buy can hap
 
 Top-up itself is a transaction too.
 
+### 5. Real order book: one stock trades on Kuru (new, Monad-native)
+
+[Kuru](https://docs.kuru.io) is the fully onchain order-book exchange (CLOB) built for Monad, with a testnet on chain 10143. Instead of every buy hitting our fixed-price mock router, **SPYx trades on a real Kuru testnet market**. That's one stock with real order-book prices, real fills and a real Monad-native venue in the demo.
+
+**How it works**
+
+1. **Venue adapter.** `ScrollBasket` no longer calls `MockRouter` directly. Each stock has a venue behind one interface:
+   ```solidity
+   interface IStockVenue {
+       function buy(address stock, uint256 usdcIn, uint256 minOut, address to) external returns (uint256 out);
+   }
+   ```
+   `MockVenue` wraps `MockRouter` (fixed prices). `KuruVenue` sends a market buy (IOC) to the Kuru SPYx/USDC order book and forwards the filled SPYx to the user. The owner maps `stock → venue`.
+2. **Create the market.** The deploy script (or a one-off `kuru-setup.ts`) calls Kuru's market creation (`ParamCreator.deployMarket` in `@kuru-labs/kuru-sdk`) for **SPYx / MockUSDC**, with precisions from `ParamCreator.calculatePrecisions` around the real S&P price.
+3. **Seed liquidity.** A small market-maker script (`backend/mm.ts`, using the Kuru SDK) holds SPYx and MockUSDC and keeps a ladder of limit sell orders, for example 10 levels from +0.05% to +1% above the real close. It re-quotes when `prices.ts` updates. To let the market maker hold SPYx, `MockStock` gains a second minter role held by the deployer, used only to seed inventory.
+4. **Buy.** Detox buys (all SPYx) and any highlight on "S&P 500", "SPY" or "the market" go through Kuru. Everything else stays on the mock router.
+5. **Mainnet.** The same `KuruVenue` points at the real xStock market on Kuru, if one exists. Switching venues is one owner call per stock. The contracts don't change.
+
+**Why this is worth it:** every Detox buy is a real taker fill on a Monad-native order book, and the market maker's re-quotes are more onchain activity. It also answers the judge's question "is any of this real trading?" with "yes, SPYx trades on Kuru."
+
+**Not verified yet (check on day 2 before building on it):**
+
+- Kuru testnet contract addresses (router, margin account, market factory or deployer). The docs mention a testnet but I couldn't find a published address page. Get them from the [Kuru docs](https://docs.kuru.io) or Kuru's Discord.
+- Whether testnet market creation is open to anyone, or needs Kuru to whitelist the pair.
+- The exact onchain market-buy function on the order-book contract. The SDK exposes it as `IOC.placeMarket(...)`; `KuruVenue` must call the same contract function, and a market buy may need funds deposited in Kuru's margin account first (`isMargin: false` avoids that in the SDK).
+- The Python SDK (`kuru-sdk` on PyPI) is archived, so use the TypeScript `@kuru-labs/kuru-sdk`.
+
+**Kill switch:** if any of the above blocks by end of day 2, map SPYx back to `MockVenue` and keep the adapter. You still get the "one config change to a real venue" line in Q&A.
+
 ### Control: weekly cap + session key
 
 Many small buys can't each need Touch ID, or nobody will use them. So:
@@ -115,7 +144,8 @@ Everything runs on Monad testnet: contracts, one deployer wallet, a gas sponsor 
 | # | Contract | What it does | Notes |
 | --- | --- | --- | --- |
 | 1 | MockUSDC | Test dollars, 6 decimals, public `faucet()` up to 1,000 per call | The user spends this |
-| 2 | MockRouter | Swaps USDC for a mock stock at an owner-set price | Stands in for a real Monad DEX |
+| 2 | MockRouter + MockVenue | Swaps USDC for a mock stock at an owner-set price, behind `IStockVenue` | Fixed-price venue for every stock except SPYx |
+| 2b | KuruVenue | `IStockVenue` that sends a market buy to the Kuru SPYx/USDC order book | SPYx's venue. Plus one Kuru market created through Kuru's own contracts (we don't deploy Kuru) |
 | 3 | ScrollBasket | `buy(stock, amount, minOut, source)` for single buys; `buyBasket(stocks, amounts, minOuts, source)` for several; `buyFor(to, ...)` for gifts | Emits `ScrollBuy(user, stock, usdc, out, source, ref)`. `source` is `SCROLL`, `HIGHLIGHT`, `COPY` or `GIFT`, so we can count each loop onchain |
 | 4 | StockFactory | Deploys a MockStock per ticker and registers it with the router | Replaces 5 hand-deployed stock contracts, so adding a ticker is one call |
 | 5+ | MockStock × ~20 | Mock xStocks, only the router can mint | The four scroll stocks (METAx, GOOGLx, NFLXx, AMZNx), SPYx for Detox, and ~15 popular highlight targets: NVDAx, TSLAx, AAPLx, MSFTx, AMDx, COINx, MSTRx, PLTRx, HOODx and so on |
@@ -152,6 +182,9 @@ doomscroll-dividends/
     src/MockStock.sol
     src/StockFactory.sol
     src/MockRouter.sol
+    src/venues/IStockVenue.sol
+    src/venues/MockVenue.sol
+    src/venues/KuruVenue.sol
     src/ScrollBasket.sol
     script/Deploy.s.sol
     test/ScrollBasket.t.sol
@@ -167,6 +200,8 @@ doomscroll-dividends/
     server.ts
     indexer.ts          reads ScrollBuy events → counters, roast data
     prices.ts
+    kuru-setup.ts       creates the SPYx/USDC Kuru market, saves its address
+    mm.ts               market maker: keeps a sell ladder on the Kuru market
     addresses.json
   web/
     app/page.tsx                  landing + sign-in + cap setup
@@ -183,6 +218,8 @@ doomscroll-dividends/
 | ScrollBasket.sol | Tests pass for mismatched arrays, zero amounts, unpriced stock, `buyFor` to a third party, and correct `source`/`ref` in events |
 | StockFactory.sol | `create("NVDAx", price)` deploys a stock the router can mint and nobody else can |
 | MockRouter.sol | $0.10 at $600 returns 0.000166 METAx |
+| KuruVenue.sol | A $1 SPYx buy fills against the Kuru book on testnet and the SPYx lands in the user's wallet; a buy with `minOut` above the fill reverts |
+| mm.ts | The Kuru SPYx book always has at least 10 sell levels within 1% of the real price |
 | highlight.js | Selecting "Nvidia" on a news article shows the card in under 200 ms; selecting a normal sentence shows nothing |
 | background.js | A day of browsing gives sensible minutes, and 30 tracked minutes triggers exactly one chunk buy |
 | session.ts | A session-key buy over the cap reverts; revoke stops the next buy |
@@ -290,13 +327,14 @@ Full-screen page for the stage: big number of transactions today, split by sourc
 - Pre-pick the news article and confirm "Nvidia" is in the first paragraph.
 - Keep the dashboard, `/live` and MonadVision open in tabs.
 - Have the deploy table and the session-key scope ready for Q&A.
+- Q&A line for "why Monad / is it real trading?": "SPYx already trades on a real Kuru order book on Monad testnet. On mainnet, every stock moves to a real venue with one config change."
 
 ## Build schedule
 
 One developer, 5 days (v1 was 4). Install the extension on day 1.
 
 1. **Day 1:** Extension tracking, live badge, popup. Install on the presenter's laptop.
-2. **Day 2:** Contracts (factory, `source`/`ref`, `buyFor`) + tests, deploy, `addresses.json`.
+2. **Day 2:** Contracts (factory, `source`/`ref`, `buyFor`, venue adapter) + tests, deploy, `addresses.json`. Morning: get Kuru testnet addresses and confirm market creation; afternoon: create the SPYx market, start `mm.ts`, wire `KuruVenue`. If blocked by evening, use the kill switch.
 3. **Day 3:** Passkey sign-in, weekly cap + session key, top-up, chunked scroll buys.
 4. **Day 4:** Highlight to buy (`highlight.js`, `tickers.json`, context menu), indexer and `/live`.
 5. **Day 5:** Roast card with Copy and Gift, Detox, polish, three timed rehearsals.
@@ -312,6 +350,7 @@ If time runs short, cut in this order: Gift, auto top-up, context menu, Detox da
 - [ ] Highlight card tested on the chosen article and on two other news sites
 - [ ] Copy this basket tested end to end on a fresh phone on mobile data
 - [ ] `/live` counter updating
+- [ ] Kuru SPYx book has liquidity, `mm.ts` running, one Detox buy filled on Kuru today
 - [ ] Screen recording of a perfect run saved locally
 
 ## Fallbacks
@@ -320,6 +359,7 @@ If time runs short, cut in this order: Gift, auto top-up, context menu, Detox da
 | --- | --- |
 | Public RPC slow or rate-limited | Switch to https://rpc.ankr.com/monad_testnet or https://rpc-testnet.monadinfra.com |
 | A transaction hangs | Show this morning's txns on MonadVision and keep going |
+| Kuru book empty or fill fails | Owner call maps SPYx to `MockVenue`; say "this one usually trades on Kuru" and show an earlier Kuru fill on MonadVision |
 | Session key rejected | Buy with Touch ID instead; say "this is the over-cap path" |
 | Highlight card doesn't show | Use the right-click "Buy $5 of NVDAx" menu |
 | Judges can't sign in on phones | Show `/live` with the presenter's backup account doing a copy buy |
@@ -351,3 +391,6 @@ All read from `ScrollBuy` events, so they're verifiable onchain:
 - Monad testnet network information
 - Stash Stock-Back (the "own what you use" model this builds on)
 - xStocks native launch on Monad (CoinGape)
+- Kuru docs: https://docs.kuru.io
+- Kuru TypeScript SDK `@kuru-labs/kuru-sdk` (market creation `ParamCreator.deployMarket`, market orders `IOC.placeMarket`), via an SDK fork README: https://app.unpkg.com/@devasher/kuru-sdk@1.0.0/files/README.md
+- Kuru seed round (The Block): https://www.theblock.co/post/307488/monad-on-chain-orderbook-exchange-kuru-raises-seed-funding
