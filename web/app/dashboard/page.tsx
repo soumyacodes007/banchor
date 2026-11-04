@@ -6,19 +6,26 @@ import { Brand, Footer } from "@/components/Brand";
 import { Dither } from "@/components/Dither";
 import { SignIn, Fingerprint } from "@/components/SignIn";
 import { savedWallet, forgetWallet, withSigner, friendlyError } from "@/lib/wallet";
-import { usdcBalance, monBalance, stockBalances, topUp, buyIntent, publicClient, FAUCET_USD, type Intent } from "@/lib/chain";
-import { toExtension } from "@/lib/extension";
+import { usdcBalance, monBalance, stockBalances, buyIntent, publicClient, FAUCET_USD, type Intent } from "@/lib/chain";
+import { TopUpModal } from "@/components/TopUpModal";
+import { toExtension, rememberExtensionId } from "@/lib/extension";
 import { api, short, usd } from "@/lib/api";
 import { EXPLORER, STOCKS, ADDRESSES } from "@/lib/config";
 
-type Activity = { hash: string; source: string; usd: number; at: number; label: string };
+type Activity = { hash: string; source: string; usd: number; at: number; label: string; items?: { ticker: string; usd: number }[] };
 const ACT_KEY = "banchor.activity";
 const loadActivity = (): Activity[] => { try { return JSON.parse(localStorage.getItem(ACT_KEY) || "[]"); } catch { return []; } };
 const pushActivity = (a: Activity) => localStorage.setItem(ACT_KEY, JSON.stringify([a, ...loadActivity()].slice(0, 50)));
 
 function decodeIntent(raw: string | null): Intent | null {
   if (!raw) return null;
-  try { return JSON.parse(atob(raw)) as Intent; } catch { return null; }
+  try {
+    // URLSearchParams turns an unescaped "+" into a space; restore base64.
+    const i = JSON.parse(atob(raw.replace(/ /g, "+"))) as Intent;
+    const ok = i && typeof i.id === "string" && Array.isArray(i.items) && i.items.length > 0 &&
+      i.items.every((it) => /^0x[0-9a-fA-F]{40}$/.test(it.stock) && /^\d+$/.test(String(it.usdc)) && BigInt(it.usdc) > 0n);
+    return ok ? i : null;
+  } catch { return null; }
 }
 
 function Dashboard() {
@@ -31,6 +38,7 @@ function Dashboard() {
   const [stocks, setStocks] = useState<Record<string, number>>({});
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [tab, setTab] = useState<"holdings" | "history">("holdings");
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState<{ ok: boolean; text: string; hash?: string } | null>(null);
   const [ext, setExt] = useState<boolean | null>(null);
@@ -41,6 +49,7 @@ function Dashboard() {
   const [intentOpen, setIntentOpen] = useState(true);
 
   useEffect(() => {
+    rememberExtensionId(params.get("ext"));
     setAddress(savedWallet()?.address ?? null);
     setActivity(loadActivity());
     setReady(true);
@@ -49,19 +58,13 @@ function Dashboard() {
 
   const refresh = useCallback(async () => {
     if (!address) return;
-    const [u, m, port] = await Promise.all([
+    // Balances come straight from the chain (no indexer lag right after a buy); prices from the backend.
+    const [u, m, s, p] = await Promise.all([
       usdcBalance(address).catch(() => null), monBalance(address).catch(() => null),
-      api<{ holdings: { ticker: string; usdValue: string }[] }>(`/api/portfolio/${address}`),
+      stockBalances(address).catch(() => ({} as Record<string, number>)),
+      api<Record<string, number>>("/api/prices"),
     ]);
-    setUsdc(u); setMon(m);
-    if (port?.holdings) {
-      // Backend values are USD in 6-decimal micro units.
-      setStocks(Object.fromEntries(port.holdings.map((h) => [h.ticker, 1])));
-      setPrices(Object.fromEntries(port.holdings.map((h) => [h.ticker, Number(h.usdValue) / 1e6])));
-    } else {
-      setStocks(await stockBalances(address).catch(() => ({})));
-      setPrices((await api<Record<string, number>>("/api/prices")) || {});
-    }
+    setUsdc(u); setMon(m); setStocks(s); setPrices(p || {});
   }, [address]);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -70,17 +73,17 @@ function Dashboard() {
 
   const clearParams = () => router.replace("/dashboard");
 
-  async function doTopUp() {
-    const amount = FAUCET_USD;
-    setBusy("topup"); setToast(null);
-    try {
-      const hash = await withSigner((acc) => topUp(acc));
-      pushActivity({ hash, source: "TOP-UP", usd: amount, at: Date.now(), label: `Top up ${usd(amount)}` });
-      setActivity(loadActivity());
-      setToast({ ok: true, text: `Added ${usd(amount)} test USDC`, hash });
-      if (topupParam) clearParams();
-      refresh();
-    } catch (e) { setToast({ ok: false, text: friendlyError(e) }); } finally { setBusy(""); }
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  useEffect(() => { if (topupParam && address) setTopUpOpen(true); }, [topupParam, address]);
+  const doTopUp = () => { setToast(null); setTopUpOpen(true); };
+  function closeTopUp() {
+    setTopUpOpen(false);
+    if (topupParam) router.replace(intent ? `/dashboard?intent=${encodeURIComponent(params.get("intent")!)}` : "/dashboard");
+  }
+  function toppedUp(hash: `0x${string}`) {
+    pushActivity({ hash, source: "TOP-UP", usd: FAUCET_USD, at: Date.now(), label: `Top up ${usd(FAUCET_USD)}` });
+    setActivity(loadActivity());
+    refresh();
   }
 
   async function confirmBuy() {
@@ -88,13 +91,14 @@ function Dashboard() {
     setBusy("Unlocking wallet…"); setToast(null);
     try {
       const hash = await withSigner((acc) => buyIntent(acc, intent, setBusy));
-      await toExtension({ type: "DD_BOUGHT", intentId: intent.id, txHash: hash });
       setBusy("Confirming on Monad…");
       const rcpt = await publicClient.waitForTransactionReceipt({ hash });
+      // The extension re-checks the receipt and releases the intent on revert.
+      toExtension({ type: "DD_BOUGHT", intentId: intent.id, txHash: hash });
       if (rcpt.status !== "success") throw new Error("Transaction reverted");
       const total = intent.items.reduce((a, b) => a + b.usd, 0);
       const label = intent.items.map((i) => `${usd(i.usd)} ${STOCKS[i.ticker] || i.ticker}`).join(" + ");
-      pushActivity({ hash, source: intent.source, usd: total, at: Date.now(), label });
+      pushActivity({ hash, source: intent.source, usd: total, at: Date.now(), label, items: intent.items.map((i) => ({ ticker: i.ticker, usd: i.usd })) });
       setActivity(loadActivity());
       setToast({ ok: true, text: `Bought ${label}`, hash });
       setIntentOpen(false); clearParams(); refresh();
@@ -126,6 +130,16 @@ function Dashboard() {
 
   const holdings = Object.entries(stocks).filter(([, v]) => v > 0);
   const value = holdings.reduce((a, [t, v]) => a + (prices[t] ? v * prices[t] : 0), 0);
+  // Dollars put into each stock through this dashboard (this browser's history).
+  const invested: Record<string, number> = {};
+  for (const a of activity) for (const it of a.items || []) invested[it.ticker] = (invested[it.ticker] || 0) + it.usd;
+  const investedTotal = Object.values(invested).reduce((a, b) => a + b, 0);
+  const rows = holdings
+    .map(([ticker, shares]) => {
+      const price = prices[ticker] || 0;
+      return { ticker, shares, price, value: shares * price, invested: invested[ticker] || 0, pct: value ? (shares * price * 100) / value : 0 };
+    })
+    .sort((a, b) => b.value - a.value);
   const intentTotal = intent?.items.reduce((a, b) => a + b.usd, 0) ?? 0;
 
   return (
@@ -166,7 +180,7 @@ function Dashboard() {
           <div className="row"><span>MON <span className="dim">gas</span></span><span>{mon == null ? "—" : mon.toFixed(3)}</span></div>
           <div className="row"><span>Address</span><a className="mono" href={`${EXPLORER}/address/${address}`} target="_blank" rel="noreferrer">{short(address)}</a></div>
           <div className="actions">
-            <button className="btn primary" disabled={!!busy} onClick={() => doTopUp()}>{busy === "topup" ? "Topping up…" : `Top up ${usd(FAUCET_USD)}`}</button>
+            <button className="btn primary" disabled={!!busy} onClick={() => doTopUp()}>Top up {usd(FAUCET_USD)}</button>
             <Link className="btn" href={`/roast/${address}`}>My roast card</Link>
           </div>
           {mon !== null && mon < 0.01 && <p className="error">You need a little test MON for gas: <a href="https://faucet.monad.xyz" target="_blank" rel="noreferrer">faucet.monad.xyz</a></p>}
@@ -179,8 +193,43 @@ function Dashboard() {
         </section>
 
         <section className="card c12">
-          <div className="label">Activity</div>
-          {activity.length ? activity.map((a) => (
+          <div className="card-head">
+            <div className="tabs" role="tablist">
+              <button role="tab" aria-selected={tab === "holdings"} className={tab === "holdings" ? "on" : ""} onClick={() => setTab("holdings")}>Your stocks{rows.length ? ` · ${rows.length}` : ""}</button>
+              <button role="tab" aria-selected={tab === "history"} className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>History{activity.length ? ` · ${activity.length}` : ""}</button>
+            </div>
+            <button className="btn ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={refresh}>Refresh</button>
+          </div>
+
+          {tab === "holdings" ? (
+            <>
+              <div className="summary">
+                <div><div className="label">Stocks</div><b>{usd(value)}</b></div>
+                <div><div className="label">Cash</div><b>{usdc == null ? "—" : usd(usdc)}</b></div>
+                <div><div className="label">Total</div><b>{usd(value + (usdc ?? 0))}</b></div>
+                <div><div className="label">Invested via Banchor</div><b>{usd(investedTotal)}</b></div>
+              </div>
+              {rows.length ? (
+                <div className="table-wrap">
+                  <table className="holdings">
+                    <thead><tr><th>Stock</th><th>Shares</th><th>Price</th><th>Value</th><th>Invested</th><th className="alloc-h">Allocation</th></tr></thead>
+                    <tbody>
+                      {rows.map((h) => (
+                        <tr key={h.ticker}>
+                          <td><b>{STOCKS[h.ticker] || h.ticker}</b> <span className="dim">{h.ticker}</span></td>
+                          <td>{h.shares < 0.0001 ? h.shares.toExponential(2) : h.shares.toFixed(4)}</td>
+                          <td>{h.price ? usd(h.price) : "—"}</td>
+                          <td><b>{h.price ? usd(h.value) : "—"}</b></td>
+                          <td>{h.invested ? usd(h.invested) : "—"}</td>
+                          <td className="alloc"><span className="bar"><i style={{ width: `${h.pct}%` }} /></span><span className="dim">{h.pct.toFixed(0)}%</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="empty">No stocks yet. Scroll Instagram or highlight “Nvidia” to make your first buy.</p>}
+            </>
+          ) : activity.length ? activity.map((a) => (
             <div className="row" key={a.hash}>
               <span><span className="pill blue" style={{ marginRight: 8 }}>{a.source.toLowerCase()}</span>{a.label}</span>
               <span className="dim">{new Date(a.at).toLocaleString()} · <a href={`${EXPLORER}/tx/${a.hash}`} target="_blank" rel="noreferrer">tx</a></span>
@@ -201,7 +250,7 @@ function Dashboard() {
             <div className="actions">
               <button className="btn" onClick={cancelBuy} disabled={!!busy}>Cancel</button>
               {usdc != null && usdc < intentTotal
-                ? <button className="btn primary" onClick={() => doTopUp()} disabled={!!busy}>{busy ? "…" : `Top up ${usd(FAUCET_USD)}`}</button>
+                ? <button className="btn primary" onClick={() => doTopUp()} disabled={!!busy}>Top up {usd(FAUCET_USD)}</button>
                 : <button className="btn primary" onClick={confirmBuy} disabled={!!busy}><Fingerprint /> {busy || "Confirm"}</button>}
             </div>
             {toast && !toast.ok && <p className="error">{toast.text}</p>}
@@ -209,19 +258,7 @@ function Dashboard() {
         </div>
       )}
 
-      {topupParam && !intent && (
-        <div className="modal-back" role="dialog" aria-modal="true">
-          <div className="modal">
-            <div className="label">Top up</div>
-            <h2>Add {usd(FAUCET_USD)} test USDC</h2>
-            <p className="dim">Free on Monad testnet. Confirm with your passkey.</p>
-            <div className="actions">
-              <button className="btn" onClick={clearParams} disabled={!!busy}>Not now</button>
-              <button className="btn primary" onClick={() => doTopUp()} disabled={!!busy}><Fingerprint /> {busy ? "Topping up…" : "Top up"}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {topUpOpen && <TopUpModal address={address} onClose={closeTopUp} onDone={toppedUp} />}
       <Footer />
     </main>
   );

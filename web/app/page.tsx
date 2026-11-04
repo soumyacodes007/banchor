@@ -29,7 +29,7 @@ export default function Landing() {
 
       <section className="steps">
         <div className="card"><div className="label">01 · Sign in</div><h3>Touch ID, nothing else.</h3><p className="dim">Mera turns a passkey into your wallet. No seed phrase, no extension wallet.</p></div>
-        <div className="card"><div className="label">02 · Top up</div><h3>$50 of test dollars.</h3><p className="dim">One tap on the faucet. On mainnet this becomes card or Apple Pay.</p></div>
+        <div className="card"><div className="label">02 · Top up</div><h3>$1,000 of test dollars.</h3><p className="dim">One tap on the faucet. On mainnet this becomes card or Apple Pay.</p></div>
         <div className="card"><div className="label">03 · Scroll</div><h3>Your feed pays you back.</h3><p className="dim">Instagram buys Meta, YouTube buys Alphabet. Highlight “Nvidia” to buy Nvidia.</p></div>
       </section>
       <Footer />

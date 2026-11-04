@@ -1,5 +1,5 @@
 {
-  "dashboardUrl": "",
+  "dashboardUrl": "http://localhost:3000",
   "backendUrl": "https://backend-production-1dd0.up.railway.app",
   "rpcUrl": "https://testnet-rpc.monad.xyz",
   "addresses": {

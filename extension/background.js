@@ -14,7 +14,8 @@ const DEFAULT_SETTINGS = {
   rpcUrl: "https://testnet-rpc.monad.xyz",
   addresses: {},                      // contents of backend/addresses.json
   mode: "roast",                      // "roast" | "detox"
-  ratePer10Min: 0.10,                 // PRD default: $0.10 per 10 minutes
+  ratePer10Min: 0.10,                 // PRD default: $0.10 per 10 minutes (Detox)
+  scrollUsdPerMin: 0.10,              // scroll sessions: $0.10 per active minute ($6/hour)
   liveRatePerMin: 1.0,                // PRD Live mode: $1 per minute
   chunkUsd: 0.30,                     // PRD v2: one buy per 30 tracked minutes at the default rate
   liveChunkSec: 20,                   // PRD v2: Live mode chunk every 20 seconds
@@ -24,7 +25,16 @@ const DEFAULT_SETTINGS = {
   blockedSites: [],
   detoxBaselineMin: 20 * 60           // PRD: hardcoded 20 hours a week
 };
-const MIN_BUY_USD = 0.01;             // PRD: skip any stock under $0.01
+const MIN_BUY_USD = 0.01;
+const NUDGE_EVERY_SEC = 5 * 60;       // suggest a buy every 5 tracked minutes on a site
+const INTENT_TTL_MS = 60 * 60 * 1000; // an intent the dashboard never confirmed or cancelled
+// Every dashboard link carries this extension's id so the page can message back.
+function dashboardLink(base, path, params = {}) {
+  const u = new URL(base.replace(/\/$/, "") + path);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  u.searchParams.set("ext", chrome.runtime.id);
+  return u.toString();
+}             // PRD: skip any stock under $0.01
 
 let tickerData = null;
 async function tickers() {
@@ -124,14 +134,64 @@ chrome.runtime.onInstalled.addListener(async () => {
   });
   await getWeek();
 });
-chrome.runtime.onStartup.addListener(() => chrome.alarms.create("tick", { periodInMinutes: 1 }));
+chrome.runtime.onStartup.addListener(async () => {
+  chrome.alarms.create("tick", { periodInMinutes: 1 });
+  await setSession({}); // re-applies the ON badge
+});
 
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== "tick") return;
   await countMinute();
 });
 
+// ---------- session (popup "Start") ----------
+// Nothing is counted until the user taps Start; it keeps running in the background until Stop.
+async function getSession() {
+  const { session } = await chrome.storage.local.get("session");
+  return { usd: {}, ...(session || { active: false, startedAt: 0, seconds: {}, nudgedAt: {} }) };
+}
+async function setSession(patch) {
+  const next = { ...(await getSession()), ...patch };
+  await chrome.storage.local.set({ session: next });
+  await chrome.action.setBadgeText({ text: next.active ? "ON" : "" });
+  await chrome.action.setBadgeBackgroundColor({ color: "#075BFF" });
+  return next;
+}
+
+async function injectIntoOpenFeeds() {
+  const { sites } = await tickers();
+  const tabs = await chrome.tabs.query({});
+  for (const t of tabs) {
+    const host = t.url ? siteOf(t.url) : null;
+    if (!host || !Object.keys(sites).some((s) => host === s || host.endsWith("." + s))) continue;
+    await chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["nudge.js"] }).catch(() => {});
+  }
+}
+chrome.runtime.onInstalled.addListener(() => injectIntoOpenFeeds().catch(() => {}));
+
+// After every few tracked minutes, show a buy suggestion inside the page being scrolled.
+async function maybeNudge(tabId, site, ticker, secs, usdEarned = 0) {
+  const session = await getSession();
+  if (!session.active || !ticker || tabId == null) return;
+  const seconds = { ...session.seconds, [ticker]: (session.seconds[ticker] || 0) + secs };
+  const usdMap = { ...session.usd, [ticker]: (session.usd[ticker] || 0) + usdEarned };
+  const last = session.nudgedAt[ticker] || 0;
+  const due = seconds[ticker] - last >= NUDGE_EVERY_SEC;
+  await setSession({ seconds, usd: usdMap, nudgedAt: due ? { ...session.nudgedAt, [ticker]: seconds[ticker] } : session.nudgedAt });
+  if (!due) return;
+  const week = await getWeek();
+  const usd = round2(unboughtUsd(week, ticker));
+  if (usd < MIN_BUY_USD) return;
+  const { stocks } = await tickers();
+  chrome.tabs.sendMessage(tabId, {
+    type: "NUDGE", site, ticker, company: stocks[ticker]?.company || ticker, usd,
+    minutes: Math.round(seconds[ticker] / 60),
+  }).catch(() => {}); // page has no nudge script (e.g. reloaded before install)
+}
+
 async function countMinute() {
+  // Counting now comes from nudge.js (SESSION_SECONDS) every few seconds while a session runs.
+  return;
   const win = await chrome.windows.getLastFocused({ populate: true }).catch(() => null);
   if (!win || !win.focused) return;
   const tab = win.tabs?.find((t) => t.active);
@@ -149,6 +209,7 @@ async function countMinute() {
   if (!active) return;
 
   await addSeconds(hit.site, hit.ticker, 60, false);
+  await maybeNudge(tab.id, hit.site, hit.ticker, 60);
 }
 
 let writeChain = Promise.resolve();
@@ -165,7 +226,7 @@ async function addSecondsUnsafe(site, ticker, secs, fromLive) {
     add(week.tickerSeconds, ticker, secs);
     const usd = fromLive
       ? (secs / 60) * settings.liveRatePerMin
-      : (secs / 600) * settings.ratePer10Min;
+      : (secs / 60) * settings.scrollUsdPerMin;
     add(week.earnedUsd, ticker, usd);
     if (fromLive) add(week.liveSeconds, ticker, secs);
   }
@@ -189,7 +250,7 @@ async function maybeQueueChunk(ticker, fromLive) {
   const chunk = fromLive
     ? (settings.liveChunkSec / 60) * settings.liveRatePerMin
     : settings.chunkUsd;
-  if (unboughtUsd(week, ticker) >= chunk) {
+  if (unboughtUsd(week, ticker) >= chunk && !(await getSession()).active) {
     await chrome.action.setBadgeText({ text: "$" });
     await chrome.action.setBadgeBackgroundColor({ color: "#836EF9" });
   }
@@ -299,6 +360,8 @@ async function createIntent(items, source) {
   if (!SOURCES.includes(source)) throw new Error("bad source");
   const settings = await getSettings();
   if (!settings.dashboardUrl) throw new Error("Banchor isn't configured yet — dashboard link missing");
+  const { intents: open = {} } = await chrome.storage.local.get("intents");
+  for (const [id, it] of Object.entries(open)) if (Date.now() - it.createdAt > INTENT_TTL_MS) await releaseIntent(id);
   const priced = [];
   for (const it of items) {
     const stock = settings.addresses[it.ticker];
@@ -317,7 +380,7 @@ async function createIntent(items, source) {
   await chrome.storage.local.set({ intents });
 
   if (source === "SCROLL") await postMinutes().catch(() => {}); // backend may be down; buy still goes through dashboard
-  const url = `${settings.dashboardUrl.replace(/\/$/, "")}/dashboard?intent=${encodeURIComponent(btoa(JSON.stringify(intent)))}`;
+  const url = dashboardLink(settings.dashboardUrl, "/dashboard", { intent: btoa(JSON.stringify(intent)) });
   await chrome.tabs.create({ url });
   return intent;
 }
@@ -405,11 +468,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     switch (msg?.type) {
       case "LIVE_SECONDS": {
         const s = await getSettings();
-        if (!s.liveMode || !sender.tab?.url) return { ok: false };
+        if (!s.liveMode || !sender.tab?.url || !(await getSession()).active) return { ok: false };
         const hit = await trackedSite(sender.tab.url);
         if (!hit || !LIVE_SITES.includes(hit.site)) return { ok: false };
         const secs = Math.max(0, Math.min(5, Number(msg.seconds) || 0)); // clamp: content scripts report ~1s at a time
         const week = await addSeconds(hit.site, hit.ticker, secs, true);
+        await maybeNudge(sender.tab.id, hit.site, hit.ticker, secs, (secs / 60) * s.liveRatePerMin);
         return { ok: true, ticker: hit.ticker, liveSeconds: week.liveSeconds[hit.ticker] || 0, liveUsd: ((week.liveSeconds[hit.ticker] || 0) / 60) * s.liveRatePerMin };
       }
       case "LIVE_STATE": {
@@ -465,7 +529,62 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { history = [] } = await chrome.storage.local.get("history");
         let usdc = null, chainError = null;
         try { await checkChain(); usdc = await usdcBalance(); } catch (e) { chainError = e.message; }
-        return { settings: s, week, basket, history: history.slice(0, 5), usdc, chainError, tickers: await tickers() };
+        return { settings: s, week, basket, history: history.slice(0, 5), usdc, chainError, tickers: await tickers(), session: await getSession() };
+      }
+      case "SESSION_SECONDS": {
+        // nudge.js: seconds the user was actively scrolling / watching in a visible tab.
+        const session = await getSession();
+        if (!session.active || !sender.tab?.url) return { ok: false };
+        const hit = await trackedSite(sender.tab.url);
+        if (!hit?.ticker) return { ok: false };
+        const s = await getSettings();
+        if (s.liveMode && LIVE_SITES.includes(hit.site)) return { ok: false }; // live.js counts these
+        const secs = Math.max(0, Math.min(10, Number(msg.seconds) || 0));
+        if (!secs) return { ok: true };
+        await addSeconds(hit.site, hit.ticker, secs, false);
+        await maybeNudge(sender.tab.id, hit.site, hit.ticker, secs, (secs / 60) * s.scrollUsdPerMin);
+        return { ok: true };
+      }
+      case "SESSION_STATE": {
+        // Cheap, polled every second by the popup while it is open.
+        const session = await getSession();
+        const { stocks } = await tickers();
+        const items = Object.keys(session.seconds || {}).map((t) => ({
+          ticker: t, company: stocks[t]?.company || t, seconds: session.seconds[t] || 0, usd: session.usd[t] || 0,
+        })).sort((a, b) => b.usd - a.usd);
+        const basket = await computeBasket();
+        return { active: session.active, startedAt: session.startedAt, items, total: items.reduce((a, b) => a + b.usd, 0),
+                 basket, basketUsd: basket.reduce((a, b) => a + b.usd, 0) };
+      }
+      case "PAGE_STATE": {
+        // For the on-page timer pill: is a session running, and what does this site buy?
+        const session = await getSession();
+        const hit = sender.tab?.url ? await trackedSite(sender.tab.url) : null;
+        if (!session.active || !hit?.ticker) return { active: session.active, ticker: null };
+        const week = await getWeek();
+        const { stocks } = await tickers();
+        return {
+          active: true, startedAt: session.startedAt, ticker: hit.ticker, company: stocks[hit.ticker]?.company || hit.ticker,
+          sessionSeconds: session.seconds[hit.ticker] || 0, sessionUsd: session.usd[hit.ticker] || 0,
+          unboughtUsd: Math.max(0, unboughtUsd(week, hit.ticker)),
+          usdPerSec: (await getSettings()).scrollUsdPerMin / 60,
+        };
+      }
+      case "SESSION_START": {
+        await injectIntoOpenFeeds();
+        await setSession({ active: true, startedAt: Date.now(), seconds: {}, usd: {}, nudgedAt: {} });
+        return { ok: true };
+      }
+      case "SESSION_STOP": {
+        await setSession({ active: false });
+        return { ok: true };
+      }
+      case "NUDGE_BUY": {
+        const week = await getWeek();
+        const usd = round2(unboughtUsd(week, msg.ticker));
+        if (usd < MIN_BUY_USD) throw new Error("Nothing to buy yet");
+        const intent = await createIntent([{ ticker: msg.ticker, usd }], "SCROLL");
+        return { ok: true, intentId: intent.id };
       }
       case "BUY_SCROLL": {
         const basket = await computeBasket();
@@ -478,15 +597,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // signin=mera asks the dashboard to start Mera (Monad's passkey wallet) right away.
         // Mera passkeys are bound to the dashboard's hostname, so sign-in can't run in the
         // extension itself; the dashboard reports the address back via DD_SET_WALLET.
-        const q = msg.signin ? "?signin=mera" : "";
-        await chrome.tabs.create({ url: `${s.dashboardUrl.replace(/\/$/, "")}/dashboard${q}` });
+        await chrome.tabs.create({ url: dashboardLink(s.dashboardUrl, "/dashboard", msg.signin ? { signin: "mera" } : {}) });
         return { ok: true };
       }
       case "TOP_UP": {
         // PRD: sponsored MockUSDC.faucet() — signed by the user's account in the dashboard.
         const s = await getSettings();
         if (!s.dashboardUrl) throw new Error("Banchor isn't configured yet — dashboard link missing");
-        await chrome.tabs.create({ url: `${s.dashboardUrl.replace(/\/$/, "")}/dashboard?topup=50` });
+        await chrome.tabs.create({ url: dashboardLink(s.dashboardUrl, "/dashboard", { topup: "1" }) });
         return { ok: true };
       }
       case "RESET_UNBOUGHT": {
@@ -499,6 +617,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "SAVE_SETTINGS": {
         const patch = { ...msg.patch };
         if (patch.wallet && !/^0x[0-9a-fA-F]{40}$/.test(patch.wallet)) throw new Error("Invalid wallet address");
+        if ("scrollUsdPerMin" in patch) {
+          const n = Number(patch.scrollUsdPerMin);
+          if (!(n >= 0.01 && n <= 10)) throw new Error("Rate must be $0.01 to $10 per minute");
+          patch.scrollUsdPerMin = n;
+        }
         if (typeof patch.addresses === "string") patch.addresses = JSON.parse(patch.addresses);
         const next = await setSettings(patch);
         priceCache.at = 0; portfolioCache.at = 0;

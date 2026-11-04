@@ -1,20 +1,145 @@
 {
   "_comment": "Names, tickers and cashtags that highlight-to-buy recognises. A ticker is only offered if its address is set in Settings (from addresses.json).",
   "stocks": {
-    "METAx":  { "company": "Meta",        "names": ["Meta", "Meta Platforms", "Facebook", "Instagram"], "tickers": ["META", "FB"] },
-    "GOOGLx": { "company": "Alphabet",    "names": ["Alphabet", "Google", "YouTube"], "tickers": ["GOOGL", "GOOG"] },
-    "NFLXx":  { "company": "Netflix",     "names": ["Netflix"], "tickers": ["NFLX"] },
-    "AMZNx":  { "company": "Amazon",      "names": ["Amazon"], "tickers": ["AMZN"] },
-    "SPYx":   { "company": "S&P 500",     "names": ["S&P 500", "S&P", "SP500", "the market"], "tickers": ["SPY"] },
-    "NVDAx":  { "company": "Nvidia",      "names": ["Nvidia"], "tickers": ["NVDA"] },
-    "TSLAx":  { "company": "Tesla",       "names": ["Tesla"], "tickers": ["TSLA"] },
-    "AAPLx":  { "company": "Apple",       "names": ["Apple", "iPhone"], "tickers": ["AAPL"] },
-    "MSFTx":  { "company": "Microsoft",   "names": ["Microsoft"], "tickers": ["MSFT"] },
-    "AMDx":   { "company": "AMD",         "names": ["AMD", "Advanced Micro Devices"], "tickers": ["AMD"] },
-    "COINx":  { "company": "Coinbase",    "names": ["Coinbase"], "tickers": ["COIN"] },
-    "MSTRx":  { "company": "Strategy",    "names": ["MicroStrategy", "Strategy Inc"], "tickers": ["MSTR"] },
-    "PLTRx":  { "company": "Palantir",    "names": ["Palantir"], "tickers": ["PLTR"] },
-    "HOODx":  { "company": "Robinhood",   "names": ["Robinhood"], "tickers": ["HOOD"] }
+    "METAx": {
+      "company": "Meta",
+      "names": [
+        "Meta",
+        "Meta Platforms",
+        "Facebook",
+        "Instagram"
+      ],
+      "tickers": [
+        "META",
+        "FB"
+      ]
+    },
+    "GOOGLx": {
+      "company": "Alphabet",
+      "names": [
+        "Alphabet",
+        "Google",
+        "YouTube"
+      ],
+      "tickers": [
+        "GOOGL",
+        "GOOG"
+      ]
+    },
+    "NFLXx": {
+      "company": "Netflix",
+      "names": [
+        "Netflix"
+      ],
+      "tickers": [
+        "NFLX"
+      ]
+    },
+    "AMZNx": {
+      "company": "Amazon",
+      "names": [
+        "Amazon"
+      ],
+      "tickers": [
+        "AMZN"
+      ]
+    },
+    "SPYx": {
+      "company": "S&P 500",
+      "names": [
+        "S&P 500",
+        "S&P",
+        "SP500",
+        "the market"
+      ],
+      "tickers": [
+        "SPY"
+      ]
+    },
+    "NVDAx": {
+      "company": "Nvidia",
+      "names": [
+        "Nvidia"
+      ],
+      "tickers": [
+        "NVDA"
+      ]
+    },
+    "TSLAx": {
+      "company": "Tesla",
+      "names": [
+        "Tesla"
+      ],
+      "tickers": [
+        "TSLA"
+      ]
+    },
+    "AAPLx": {
+      "company": "Apple",
+      "names": [
+        "Apple",
+        "iPhone"
+      ],
+      "tickers": [
+        "AAPL"
+      ]
+    },
+    "MSFTx": {
+      "company": "Microsoft",
+      "names": [
+        "Microsoft"
+      ],
+      "tickers": [
+        "MSFT"
+      ]
+    },
+    "AMDx": {
+      "company": "AMD",
+      "names": [
+        "AMD",
+        "Advanced Micro Devices"
+      ],
+      "tickers": [
+        "AMD"
+      ]
+    },
+    "COINx": {
+      "company": "Coinbase",
+      "names": [
+        "Coinbase"
+      ],
+      "tickers": [
+        "COIN"
+      ]
+    },
+    "MSTRx": {
+      "company": "Strategy",
+      "names": [
+        "MicroStrategy",
+        "Strategy Inc"
+      ],
+      "tickers": [
+        "MSTR"
+      ]
+    },
+    "PLTRx": {
+      "company": "Palantir",
+      "names": [
+        "Palantir"
+      ],
+      "tickers": [
+        "PLTR"
+      ]
+    },
+    "HOODx": {
+      "company": "Robinhood",
+      "names": [
+        "Robinhood"
+      ],
+      "tickers": [
+        "HOOD"
+      ]
+    }
   },
   "sites": {
     "instagram.com": "METAx",
@@ -22,7 +147,11 @@
     "youtube.com": "GOOGLx",
     "netflix.com": "NFLXx",
     "amazon.com": "AMZNx",
-    "x.com": null
+    "x.com": "TSLAx",
+    "twitter.com": "TSLAx"
   },
-  "videoSites": ["youtube.com", "netflix.com"]
+  "videoSites": [
+    "youtube.com",
+    "netflix.com"
+  ]
 }

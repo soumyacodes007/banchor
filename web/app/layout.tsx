@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${serif.variable} ${sans.variable}`}>
       <body>
         {children}
         <Script src="/dither.js" strategy="afterInteractive" />

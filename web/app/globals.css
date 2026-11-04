@@ -78,3 +78,47 @@ canvas[data-dither] { image-rendering: pixelated; display: block; width: 100%; h
 .live { min-height: 100vh; display: flex; flex-direction: column; }
 .live .count { font: 400 clamp(90px, 20vw, 260px)/.9 var(--serif); color: var(--accent); letter-spacing: -4px; }
 .feed .row { font-size: 18px; }
+
+/* Top-up stepper */
+.modal-back.blur { background: rgba(23,43,115,.18); z-index: 1000; }
+.steps-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
+.step { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 10px 0; position: relative; }
+.step:not(:last-child)::after { content: ""; position: absolute; left: 13px; top: 40px; bottom: -6px; width: 2px; background: var(--line); }
+.step.done:not(:last-child)::after { background: var(--accent); }
+.step .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600;
+  border: 1.5px solid var(--line); color: var(--dim); background: var(--card); }
+.step.now .dot { border-color: var(--accent); color: var(--accent); }
+.step.done .dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+.step .title { font-weight: 600; line-height: 28px; }
+.step.todo .title { color: var(--dim); }
+.step .body p { margin: 4px 0 0; }
+.step .actions { margin-top: 10px; }
+.small { font-size: 12px; }
+.addr { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 6px 6px 10px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); }
+.addr code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.addr .btn { padding: 4px 10px; font-size: 12px; }
+.addr .btn.icon { width: 32px; height: 32px; padding: 0; border-radius: 8px; }
+.addr .btn.icon.copied { color: var(--ok); background: var(--ok-bg); }
+.modal .close { width: 100%; margin-top: 8px; font-size: 13px; }
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--peri); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
+
+/* Holdings */
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.tabs button { border: 0; background: transparent; font: 600 13px var(--sans); color: var(--dim); padding: 6px 12px; border-radius: 9px; cursor: pointer; }
+.tabs button.on { background: var(--card); color: var(--accent); box-shadow: 0 1px 0 var(--line); }
+.summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.summary > div { padding: 12px; border-radius: 12px; background: var(--bg); }
+.summary b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+.holdings { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+.holdings th { text-align: left; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.holdings td { padding: 12px 10px; border-bottom: 1px dashed var(--line); white-space: nowrap; }
+.holdings tr:last-child td { border-bottom: 0; }
+.holdings td:first-child, .holdings th:first-child { padding-left: 0; }
+.alloc { display: flex; align-items: center; gap: 8px; min-width: 140px; }
+.alloc .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--peri); overflow: hidden; }
+.alloc .bar i { display: block; height: 100%; background: var(--accent); }
+@media (max-width: 720px) { .summary { grid-template-columns: repeat(2, 1fr); } }

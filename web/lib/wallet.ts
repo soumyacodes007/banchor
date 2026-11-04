@@ -71,6 +71,6 @@ export function friendlyError(e: unknown): string {
     }
   }
   const msg = e instanceof Error ? e.message : String(e);
-  if (/insufficient funds/i.test(msg)) return "Not enough MON for gas. Get test MON at faucet.monad.xyz.";
+  if (/insufficient funds|missing or invalid parameters/i.test(msg)) return "Not enough MON for gas. Get test MON at faucet.monad.xyz.";
   return msg.split("\n")[0];
 }
