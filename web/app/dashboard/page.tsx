@@ -6,7 +6,7 @@ import { Brand, Footer } from "@/components/Brand";
 import { Dither } from "@/components/Dither";
 import { SignIn, Fingerprint } from "@/components/SignIn";
 import { savedWallet, forgetWallet, withSigner, friendlyError } from "@/lib/wallet";
-import { usdcBalance, monBalance, stockBalances, topUp, buyIntent, publicClient, type Intent } from "@/lib/chain";
+import { usdcBalance, monBalance, stockBalances, topUp, buyIntent, publicClient, FAUCET_USD, type Intent } from "@/lib/chain";
 import { toExtension } from "@/lib/extension";
 import { api, short, usd } from "@/lib/api";
 import { EXPLORER, STOCKS, ADDRESSES } from "@/lib/config";
@@ -49,11 +49,19 @@ function Dashboard() {
 
   const refresh = useCallback(async () => {
     if (!address) return;
-    const [u, m, s, p] = await Promise.all([
+    const [u, m, port] = await Promise.all([
       usdcBalance(address).catch(() => null), monBalance(address).catch(() => null),
-      stockBalances(address).catch(() => ({})), api<Record<string, number>>("/api/prices"),
+      api<{ holdings: { ticker: string; usdValue: string }[] }>(`/api/portfolio/${address}`),
     ]);
-    setUsdc(u); setMon(m); setStocks(s); setPrices(p || {});
+    setUsdc(u); setMon(m);
+    if (port?.holdings) {
+      // Backend values are USD in 6-decimal micro units.
+      setStocks(Object.fromEntries(port.holdings.map((h) => [h.ticker, 1])));
+      setPrices(Object.fromEntries(port.holdings.map((h) => [h.ticker, Number(h.usdValue) / 1e6])));
+    } else {
+      setStocks(await stockBalances(address).catch(() => ({})));
+      setPrices((await api<Record<string, number>>("/api/prices")) || {});
+    }
   }, [address]);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -62,10 +70,11 @@ function Dashboard() {
 
   const clearParams = () => router.replace("/dashboard");
 
-  async function doTopUp(amount = 50) {
+  async function doTopUp() {
+    const amount = FAUCET_USD;
     setBusy("topup"); setToast(null);
     try {
-      const hash = await withSigner((acc) => topUp(acc, amount));
+      const hash = await withSigner((acc) => topUp(acc));
       pushActivity({ hash, source: "TOP-UP", usd: amount, at: Date.now(), label: `Top up ${usd(amount)}` });
       setActivity(loadActivity());
       setToast({ ok: true, text: `Added ${usd(amount)} test USDC`, hash });
@@ -157,11 +166,11 @@ function Dashboard() {
           <div className="row"><span>MON <span className="dim">gas</span></span><span>{mon == null ? "—" : mon.toFixed(3)}</span></div>
           <div className="row"><span>Address</span><a className="mono" href={`${EXPLORER}/address/${address}`} target="_blank" rel="noreferrer">{short(address)}</a></div>
           <div className="actions">
-            <button className="btn primary" disabled={!!busy} onClick={() => doTopUp(50)}>{busy === "topup" ? "Topping up…" : "Top up $50"}</button>
+            <button className="btn primary" disabled={!!busy} onClick={() => doTopUp()}>{busy === "topup" ? "Topping up…" : `Top up ${usd(FAUCET_USD)}`}</button>
             <Link className="btn" href={`/roast/${address}`}>My roast card</Link>
           </div>
           {mon !== null && mon < 0.01 && <p className="error">You need a little test MON for gas: <a href="https://faucet.monad.xyz" target="_blank" rel="noreferrer">faucet.monad.xyz</a></p>}
-          {!ADDRESSES.MockUSDC && <p className="error">Contracts aren't configured yet (NEXT_PUBLIC_ADDRESSES).</p>}
+          {!ADDRESSES.MockUSDC && <p className="error">Contracts aren't configured (lib/addresses.json).</p>}
           <div className="strip"><Dither kind="strip" seed={9} px={2} /></div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
             <span className="dim" style={{ fontSize: 12 }}>Secured by a Mera passkey</span>
@@ -192,7 +201,7 @@ function Dashboard() {
             <div className="actions">
               <button className="btn" onClick={cancelBuy} disabled={!!busy}>Cancel</button>
               {usdc != null && usdc < intentTotal
-                ? <button className="btn primary" onClick={() => doTopUp(50)} disabled={!!busy}>{busy ? "…" : "Top up $50"}</button>
+                ? <button className="btn primary" onClick={() => doTopUp()} disabled={!!busy}>{busy ? "…" : `Top up ${usd(FAUCET_USD)}`}</button>
                 : <button className="btn primary" onClick={confirmBuy} disabled={!!busy}><Fingerprint /> {busy || "Confirm"}</button>}
             </div>
             {toast && !toast.ok && <p className="error">{toast.text}</p>}
@@ -204,11 +213,11 @@ function Dashboard() {
         <div className="modal-back" role="dialog" aria-modal="true">
           <div className="modal">
             <div className="label">Top up</div>
-            <h2>Add ${Number(topupParam) || 50} test USDC</h2>
+            <h2>Add {usd(FAUCET_USD)} test USDC</h2>
             <p className="dim">Free on Monad testnet. Confirm with your passkey.</p>
             <div className="actions">
               <button className="btn" onClick={clearParams} disabled={!!busy}>Not now</button>
-              <button className="btn primary" onClick={() => doTopUp(Number(topupParam) || 50)} disabled={!!busy}><Fingerprint /> {busy ? "Topping up…" : "Top up"}</button>
+              <button className="btn primary" onClick={() => doTopUp()} disabled={!!busy}><Fingerprint /> {busy ? "Topping up…" : "Top up"}</button>
             </div>
           </div>
         </div>

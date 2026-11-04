@@ -3,7 +3,7 @@
 Landing, dashboard, roast card and live stage page. Wallets are [Mera](https://docs.monad.xyz/guides/mera) passkey accounts (Monad), derived in the browser; nothing secret is stored.
 
 ```bash
-cp .env.example .env.local   # fill in EXTENSION_ID, BACKEND_URL, ADDRESSES
+cp .env.example .env.local   # set NEXT_PUBLIC_EXTENSION_ID; backend + addresses default to the testnet deploy
 npm install
 npm run dev                  # http://localhost:3000
 ```

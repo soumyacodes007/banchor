@@ -1,6 +1,6 @@
 "use client";
-import { createPublicClient, createWalletClient, http, type LocalAccount, formatUnits, parseUnits } from "viem";
-import { chain, RPC_URL, ADDRESSES } from "./config";
+import { createPublicClient, createWalletClient, http, type LocalAccount, formatUnits } from "viem";
+import { chain, RPC_URL, ADDRESSES, STOCK_TICKERS } from "./config";
 import { erc20Abi, mockUsdcAbi, scrollBasketAbi, SOURCE_ID, type Source } from "./abi";
 
 export const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
@@ -23,8 +23,7 @@ export async function monBalance(address: `0x${string}`): Promise<number> {
 
 export async function stockBalances(address: `0x${string}`): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
-  const tickers = Object.keys(ADDRESSES).filter((k) => k !== "MockUSDC" && k !== "ScrollBasket" && !k.startsWith("Kuru") && !k.endsWith("Router") && !k.endsWith("Factory"));
-  await Promise.all(tickers.map(async (t) => {
+  await Promise.all(STOCK_TICKERS.map(async (t) => {
     try {
       const raw = await publicClient.readContract({ address: ADDRESSES[t], abi: erc20Abi, functionName: "balanceOf", args: [address] });
       out[t] = Number(formatUnits(raw, 18));
@@ -34,16 +33,17 @@ export async function stockBalances(address: `0x${string}`): Promise<Record<stri
 }
 
 // Monad charges the declared gas limit, so set explicit, generous-but-bounded limits.
-export async function topUp(account: LocalAccount, usd = 50) {
+export const FAUCET_USD = 1000;
+export async function topUp(account: LocalAccount) {
   const hash = await walletClient(account).writeContract({
-    address: need("MockUSDC"), abi: mockUsdcAbi, functionName: "faucet", args: [parseUnits(String(usd), 6)], gas: 120_000n,
+    address: need("MockUSDC"), abi: mockUsdcAbi, functionName: "faucet", gas: 120_000n,
   });
   await publicClient.waitForTransactionReceipt({ hash });
   return hash;
 }
 
 export type IntentItem = { ticker: string; stock: `0x${string}`; usdc: string; usd: number };
-export type Intent = { id: string; chainId: number; source: Source; items: IntentItem[]; createdAt: number };
+export type Intent = { id: string; chainId: number; source: Source; items: IntentItem[]; createdAt: number; ref?: `0x${string}` };
 
 /** Approves USDC if needed, then buys the whole basket in one ScrollBasket call. */
 export async function buyIntent(account: LocalAccount, intent: Intent, onStep?: (s: string) => void) {
@@ -62,8 +62,10 @@ export async function buyIntent(account: LocalAccount, intent: Intent, onStep?: 
   const stocks = intent.items.map((i) => i.stock);
   const minOuts = intent.items.map(() => 0n); // testnet only, per PRD
   const source = SOURCE_ID[intent.source] ?? 0;
-  const hash = intent.items.length === 1
+  const ref = intent.source === "COPY" ? intent.ref : undefined;
+  if (intent.source === "COPY" && !ref) throw new Error("Copy buy needs the copied wallet");
+  const hash = intent.items.length === 1 && !ref
     ? await wc.writeContract({ address: basket, abi: scrollBasketAbi, functionName: "buy", args: [stocks[0], amounts[0], 0n, source], gas: 400_000n })
-    : await wc.writeContract({ address: basket, abi: scrollBasketAbi, functionName: "buyBasket", args: [stocks, amounts, minOuts, source], gas: BigInt(250_000 + 200_000 * stocks.length) });
+    : await wc.writeContract({ address: basket, abi: scrollBasketAbi, functionName: "buyBasket", args: [stocks, amounts, minOuts, source, ref ?? "0x0000000000000000000000000000000000000000"], gas: BigInt(250_000 + 200_000 * stocks.length) });
   return hash;
 }

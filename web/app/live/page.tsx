@@ -2,15 +2,15 @@
 import { useEffect, useState } from "react";
 import { Brand } from "@/components/Brand";
 import { Dither } from "@/components/Dither";
-import { api, short, usd } from "@/lib/api";
+import { api, short } from "@/lib/api";
 import { BACKEND_URL, STOCKS } from "@/lib/config";
 
 // GET /api/stats (PRD): total txns today, split by source, last 20 buys.
 type Stats = {
-  total: number; wallets?: number; bySource?: Record<string, number>;
-  recent?: { user: string; ticker: string; usd: number; source: string; at: number }[];
+  totalTransactions: number; transactionsToday: number; uniqueWallets: number; bySource: Record<string, number>;
+  latest: { user: string; ticker: string; usd: string; source: string; blockTime: number; txUrl: string }[];
 };
-const ago = (t: number) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s}s ago` : `${Math.round(s / 60)}m ago`; };
+const ago = (t: number) => { const s = Math.max(0, Math.round(Date.now() / 1000 - t)); return s < 60 ? `${s}s ago` : `${Math.round(s / 60)}m ago`; };
 
 export default function Live() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -27,20 +27,20 @@ export default function Live() {
         <section className="card blue c7" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <div className="label">Transactions today</div>
-            <div className="count">{stats ? stats.total.toLocaleString() : "—"}</div>
-            {!BACKEND_URL && <p className="error">Set NEXT_PUBLIC_BACKEND_URL to show live stats.</p>}
+            <div className="count">{stats ? stats.transactionsToday.toLocaleString() : "—"}</div>
+            {!stats && BACKEND_URL && <p className="dim">Connecting to {BACKEND_URL.replace("https://", "")}…</p>}
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {Object.entries(stats?.bySource || {}).map(([k, v]) => <span key={k} className="pill blue" style={{ fontSize: 16 }}>{k.toLowerCase()} · {v}</span>)}
-            {stats?.wallets != null && <span className="pill" style={{ fontSize: 16 }}>{stats.wallets} wallets</span>}
+            {stats && <span className="pill" style={{ fontSize: 16 }}>{stats.uniqueWallets} wallets · {stats.totalTransactions} all-time</span>}
           </div>
         </section>
         <section className="card c5 feed" style={{ padding: 0 }}>
           <div style={{ height: 140 }}><Dither seed={17} px={3} tentacle={1} /></div>
           <div style={{ padding: 18 }}>
             <div className="label">Latest buys</div>
-            {stats?.recent?.length ? stats.recent.slice(0, 12).map((r, i) => (
-              <div className="row" key={i}><span><span className="mono">{short(r.user)}</span> bought {usd(r.usd)} {STOCKS[r.ticker] || r.ticker}</span><span className="dim">via {r.source.toLowerCase()} · {ago(r.at)}</span></div>
+            {stats?.latest?.length ? stats.latest.slice(0, 12).map((r, i) => (
+              <div className="row" key={i}><span><span className="mono">{short(r.user)}</span> bought {r.usd} {STOCKS[r.ticker] || r.ticker}</span><a className="dim" href={r.txUrl} target="_blank" rel="noreferrer">via {r.source.toLowerCase()} · {ago(r.blockTime)}</a></div>
             )) : <p className="empty">Waiting for the first buy…</p>}
           </div>
         </section>
